@@ -1,8 +1,8 @@
 # paper-trading-terminal
 
-**言語：** [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · 日本語 · [한국어](README.ko.md)
-
 **AI ネイティブの米国株ペーパートレード CLI** — リアルタイム相場、ポートフォリオ、取引。
+
+<p align="center"><strong>言語：</strong> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · 日本語 · <a href="README.ko.md">한국어</a></p>
 
 ## 機能
 

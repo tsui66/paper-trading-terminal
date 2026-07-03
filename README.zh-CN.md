@@ -1,8 +1,8 @@
 # paper-trading-terminal
 
-**语言：** [English](README.md) · 简体中文 · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
-
 **面向 AI 的美股模拟盘 CLI** — 实时行情、持仓组合与交易。
+
+<p align="center"><strong>语言：</strong> <a href="README.md">English</a> · 简体中文 · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
 ## 功能
 

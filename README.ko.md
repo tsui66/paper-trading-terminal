@@ -1,8 +1,8 @@
 # paper-trading-terminal
 
-**언어:** [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · 한국어
-
 **AI 네이티브 미국 주식 페이퍼 트레이딩 CLI** — 실시간 시세, 포트폴리오, 거래.
+
+<p align="center"><strong>언어:</strong> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · 한국어</p>
 
 ## 기능
 
