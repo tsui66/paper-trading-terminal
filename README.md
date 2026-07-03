@@ -6,16 +6,15 @@
 
 - **Paper account** — cash, positions, mark-to-market PnL, persisted in SQLite
 - **Orders** — market and limit buy/sell, cancel, auto-fill when price crosses limit
-- **Market data** — Yahoo (optional feature) with fcontext CLI fallback; fails loudly if both are down
+- **Market data** — Yahoo first, fcontext CLI fallback; fails loudly if both are down
 - **TUI** — watchlist, Braille candlestick chart, in-app order entry, fill notifications
 - **AI-native** — structured JSON I/O, `paper schema` for tool discovery, `AgentSkill` for Rust embeds
 - **Rust library** — embed via `AgentSkill` and `TradingEngine`
 
 ## Requirements
 
-- Rust stable (2024 edition)
-- **fcontext** (optional) CLI on `PATH` when using the default provider chain (recommended for reliable quotes)
-- **Yahoo provider** (optional): `cargo build --features yahoo` — requires Rust ≥ 1.91
+- Rust stable ≥ 1.91 (2024 edition; Yahoo enabled by default)
+- **fcontext** CLI on `PATH` for fallback when Yahoo is unavailable
 
 ## Installation
 
@@ -178,8 +177,8 @@ timeout_secs = 30
 
 | Priority | Provider | Notes |
 |----------|----------|-------|
-| 1 | **yahoo** | Build with `--features yahoo`; free, can be unstable |
-| 2 | **fcontext** | Subprocess CLI; install + `fcontext auth login` (see [fcontext CLI](#fcontext-cli)) |
+| 1 | **yahoo** | Default; free Yahoo Finance data (can be unstable) |
+| 2 | **fcontext** | Fallback CLI; install + `fcontext auth login` (see [fcontext CLI](#fcontext-cli)) |
 | — | **mock** | Synthetic prices; **dev/tests only**, never used as automatic fallback |
 
 ```
@@ -310,7 +309,7 @@ Release packaging (local):
 ```bash
 ./scripts/package_release.sh                    # host tarball → dist/
 ./scripts/package_release.sh 0.1.0 darwin-arm64 linux-amd64 windows-amd64
-PAPER_FEATURES=yahoo ./scripts/package_release.sh   # Rust >= 1.91
+cargo build --no-default-features   # slim binary without Yahoo
 ```
 
 Push a `v*` tag to trigger [`.github/workflows/release.yml`](.github/workflows/release.yml) (multi-platform GitHub Release).

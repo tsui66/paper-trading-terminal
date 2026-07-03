@@ -17,7 +17,8 @@ name = "paper_trading_terminal"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["yahoo"]
+# Disable with: cargo build --no-default-features
 # Requires Rust >= 1.91 (yfinance-rs / paft-market)
 yahoo = ["dep:yfinance-rs"]
 
