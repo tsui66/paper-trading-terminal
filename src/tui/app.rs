@@ -4,6 +4,7 @@ use crate::engine::TradingEngine;
 use crate::engine::order::OrderSide;
 use crate::provider::{
     Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote, fetch_quotes_report,
+    format_quote_failure_log,
 };
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
 use crate::tui::widgets::chart::CandlestickChart;
@@ -254,33 +255,56 @@ impl App {
 
     async fn refresh_quotes(&mut self) {
         let symbols = self.config.watchlist.symbols.clone();
-        let report = fetch_quotes_report(self.provider.as_ref(), &symbols).await;
 
-        if report.all_failed() {
+        if let Ok(batch) = self.provider.quotes(&symbols).await {
+            for q in batch {
+                self.merge_quote(q);
+            }
+        }
+
+        let missing: Vec<String> = symbols
+            .iter()
+            .filter(|sym| {
+                !self
+                    .quotes
+                    .iter()
+                    .any(|q| q.symbol.eq_ignore_ascii_case(sym))
+            })
+            .cloned()
+            .collect();
+
+        let mut failures = Vec::new();
+        if !missing.is_empty() {
+            let report = fetch_quotes_report(self.provider.as_ref(), &missing).await;
+            for q in report.quotes {
+                self.merge_quote(q);
+            }
+            failures = report.failures;
+        }
+
+        let fetched = symbols
+            .iter()
+            .filter(|sym| {
+                self.quotes
+                    .iter()
+                    .any(|q| q.symbol.eq_ignore_ascii_case(sym))
+            })
+            .count();
+
+        if fetched == 0 {
             self.log_lines.push(format!(
-                "Quote error: yahoo and fcontext both failed for all {} symbols",
+                "Quote error: yahoo and fcontext both failed (0/{})",
                 symbols.len()
             ));
-            for f in &report.failures {
-                self.log_lines.push(format!("  {}", f.error));
+            for f in &failures {
+                self.log_lines
+                    .push(format!("  {}", format_quote_failure_log(f)));
             }
             self.log_lines
                 .push("  hint: paper config provider-status".into());
             return;
         }
 
-        let fetched = report.quotes.len();
-        for q in report.quotes {
-            if let Some(existing) = self
-                .quotes
-                .iter_mut()
-                .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
-            {
-                *existing = q;
-            } else {
-                self.quotes.push(q);
-            }
-        }
         self.log_lines.push(format!(
             "Quotes {}/{} @ {}",
             fetched,
@@ -288,8 +312,21 @@ impl App {
             chrono::Utc::now().format("%H:%M:%S")
         ));
 
-        for f in &report.failures {
-            self.log_lines.push(format!("Quote failed: {}", f.error));
+        for f in &failures {
+            self.log_lines
+                .push(format!("Quote failed: {}", format_quote_failure_log(f)));
+        }
+    }
+
+    fn merge_quote(&mut self, q: Quote) {
+        if let Some(existing) = self
+            .quotes
+            .iter_mut()
+            .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
+        {
+            *existing = q;
+        } else {
+            self.quotes.push(q);
         }
     }
 

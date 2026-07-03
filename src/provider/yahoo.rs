@@ -2,20 +2,76 @@ use super::cache::QuoteCache;
 use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
 use chrono::Utc;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
 use yfinance_rs::core::conversions::money_to_f64;
 use yfinance_rs::{Interval, Range, Ticker, YfClient};
 
+const YAHOO_MAX_ATTEMPTS: u32 = 3;
+
 pub struct YahooProvider {
-    client: YfClient,
+    client: Arc<Mutex<YfClient>>,
     cache: Option<QuoteCache>,
 }
 
 impl YahooProvider {
     pub fn new(cache: Option<QuoteCache>) -> Self {
         Self {
-            client: YfClient::default(),
+            client: Arc::new(Mutex::new(YfClient::default())),
             cache,
         }
+    }
+
+    fn is_auth_error(msg: &str) -> bool {
+        let lower = msg.to_ascii_lowercase();
+        lower.contains("authentication")
+            || lower.contains("no cookie")
+            || lower.contains("crumb")
+            || lower.contains("auth(")
+    }
+
+    async fn reset_client(&self) {
+        let mut guard = self.client.lock().await;
+        *guard = YfClient::default();
+    }
+
+    async fn fetch_yahoo_quotes(
+        &self,
+        symbols: &[String],
+    ) -> Result<Vec<yfinance_rs::Quote>, ProviderError> {
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut last_err = None;
+        for attempt in 0..YAHOO_MAX_ATTEMPTS {
+            let client = self.client.lock().await.clone();
+            match yfinance_rs::quotes(&client, symbols).await {
+                Ok(quotes) => return Ok(quotes),
+                Err(e) => {
+                    let msg = e.to_string();
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        symbols = ?symbols,
+                        error = %msg,
+                        "yahoo batch quote failed"
+                    );
+                    last_err = Some(msg.clone());
+                    if Self::is_auth_error(&msg) && attempt + 1 < YAHOO_MAX_ATTEMPTS {
+                        self.reset_client().await;
+                        tokio::time::sleep(Duration::from_millis(400 * (attempt as u64 + 1))).await;
+                        continue;
+                    }
+                    return Err(ProviderError::Network(format!("yahoo quotes: {e}")));
+                }
+            }
+        }
+
+        Err(ProviderError::Network(format!(
+            "yahoo quotes: {}",
+            last_err.unwrap_or_else(|| "unknown error".into())
+        )))
     }
 
     fn to_yf_range(range: HistoryRange) -> Range {
@@ -54,9 +110,18 @@ impl YahooProvider {
         };
         let volume = q.day_volume.unwrap_or(0);
         let ts = Utc::now();
+        let sym = {
+            let s = q.symbol.to_string();
+            let upper = s.trim().to_uppercase();
+            if upper.is_empty() {
+                symbol.to_uppercase()
+            } else {
+                upper
+            }
+        };
 
         Quote {
-            symbol: symbol.to_uppercase(),
+            symbol: sym,
             price,
             change,
             change_pct,
@@ -85,11 +150,12 @@ impl MarketDataProvider for YahooProvider {
             return Ok(q);
         }
 
-        let ticker = Ticker::new(&self.client, &sym);
-        let raw = ticker
-            .quote()
-            .await
-            .map_err(|e| ProviderError::Network(format!("yahoo quote {sym}: {e}")))?;
+        let raw = self
+            .fetch_yahoo_quotes(std::slice::from_ref(&sym))
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProviderError::NotFound(sym.clone()))?;
 
         let quote = Self::map_quote(&sym, raw);
         if let Some(cache) = &self.cache {
@@ -128,22 +194,21 @@ impl MarketDataProvider for YahooProvider {
             return Ok(cached);
         }
 
+        let raw = self.fetch_yahoo_quotes(&missing).await?;
         let mut fetched = Vec::new();
-        let mut last_err = None;
-        for sym in &missing {
-            match self.quote(sym).await {
-                Ok(q) => fetched.push(q),
-                Err(e) => {
-                    tracing::warn!(symbol = %sym, error = %e, "yahoo quote failed in batch");
-                    last_err = Some(e);
-                }
+        for q in raw {
+            let mapped = Self::map_quote("", q);
+            if let Some(cache) = &self.cache {
+                cache.put(mapped.clone());
             }
+            fetched.push(mapped);
         }
 
         cached.extend(fetched);
         if cached.is_empty() {
-            return Err(last_err
-                .unwrap_or_else(|| ProviderError::Unavailable("yahoo returned no quotes".into())));
+            return Err(ProviderError::Unavailable(
+                "yahoo returned no quotes".into(),
+            ));
         }
         Ok(cached)
     }
@@ -159,28 +224,49 @@ impl MarketDataProvider for YahooProvider {
             return Err(ProviderError::NotFound(symbol.to_string()));
         }
 
-        let ticker = Ticker::new(&self.client, &sym);
-        let history = ticker
-            .history(
-                Some(Self::to_yf_range(range)),
-                Some(Self::to_yf_interval(interval)),
-                false,
-            )
-            .await
-            .map_err(|e| ProviderError::Network(format!("yahoo history {sym}: {e}")))?;
+        let mut last_err = None;
+        for attempt in 0..YAHOO_MAX_ATTEMPTS {
+            let client = self.client.lock().await.clone();
+            let ticker = Ticker::new(&client, &sym);
+            match ticker
+                .history(
+                    Some(Self::to_yf_range(range)),
+                    Some(Self::to_yf_interval(interval)),
+                    false,
+                )
+                .await
+            {
+                Ok(history) => {
+                    return Ok(history
+                        .iter()
+                        .map(|bar| Candle {
+                            symbol: sym.clone(),
+                            open: money_to_f64(&bar.open),
+                            high: money_to_f64(&bar.high),
+                            low: money_to_f64(&bar.low),
+                            close: money_to_f64(&bar.close),
+                            volume: bar.volume.unwrap_or(0),
+                            timestamp: bar.ts,
+                            source: Some("yahoo".into()),
+                        })
+                        .collect());
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    last_err = Some(msg.clone());
+                    if Self::is_auth_error(&msg) && attempt + 1 < YAHOO_MAX_ATTEMPTS {
+                        self.reset_client().await;
+                        tokio::time::sleep(Duration::from_millis(400 * (attempt as u64 + 1))).await;
+                        continue;
+                    }
+                    return Err(ProviderError::Network(format!("yahoo history {sym}: {e}")));
+                }
+            }
+        }
 
-        Ok(history
-            .iter()
-            .map(|bar| Candle {
-                symbol: sym.clone(),
-                open: money_to_f64(&bar.open),
-                high: money_to_f64(&bar.high),
-                low: money_to_f64(&bar.low),
-                close: money_to_f64(&bar.close),
-                volume: bar.volume.unwrap_or(0),
-                timestamp: bar.ts,
-                source: Some("yahoo".into()),
-            })
-            .collect())
+        Err(ProviderError::Network(format!(
+            "yahoo history {sym}: {}",
+            last_err.unwrap_or_else(|| "unknown error".into())
+        )))
     }
 }

@@ -171,6 +171,28 @@ pub fn symbol_providers_failed(symbol: &str, attempts: &[String]) -> String {
     }
 }
 
+/// Short, log-friendly quote failure (strips nested provider prefixes).
+pub fn format_quote_failure_log(failure: &QuoteFailure) -> String {
+    let mut msg = failure.error.clone();
+    if let Some(rest) = msg.strip_prefix("provider unavailable: ") {
+        msg = rest.to_string();
+    }
+    msg = msg
+        .replace("network error: yahoo quote ", "yahoo: ")
+        .replace("network error: yahoo quotes: ", "yahoo: ")
+        .replace(
+            "Authentication error: No cookie received from fc.yahoo.com",
+            "yahoo cookie/auth failed",
+        )
+        .replace("provider unavailable: ", "fcontext: ");
+    const MAX: usize = 96;
+    if msg.len() > MAX {
+        format!("{}…", &msg[..MAX])
+    } else {
+        msg
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ProviderError {
     #[error("symbol not found: {0}")]
