@@ -1,6 +1,6 @@
 [package]
 name = "paper-trading-terminal"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "AI-native CLI for local US stock paper trading with real-time market data, portfolio, and trading"
 license = "MIT"
