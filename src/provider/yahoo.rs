@@ -1,7 +1,7 @@
 use super::cache::QuoteCache;
 use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
-use chrono::{TimeZone, Utc};
+use chrono::Utc;
 use yfinance_rs::core::conversions::money_to_f64;
 use yfinance_rs::{Interval, Range, Ticker, YfClient};
 
@@ -32,35 +32,28 @@ impl YahooProvider {
 
     fn to_yf_interval(interval: HistoryInterval) -> Interval {
         match interval {
-            HistoryInterval::M1 => Interval::M1,
-            HistoryInterval::M5 => Interval::M5,
-            HistoryInterval::M15 => Interval::M15,
-            HistoryInterval::M30 => Interval::M30,
-            HistoryInterval::H1 => Interval::H1,
+            HistoryInterval::M1 => Interval::I1m,
+            HistoryInterval::M5 => Interval::I5m,
+            HistoryInterval::M15 => Interval::I15m,
+            HistoryInterval::M30 => Interval::I30m,
+            HistoryInterval::H1 => Interval::I1h,
             HistoryInterval::D1 => Interval::D1,
             HistoryInterval::W1 => Interval::W1,
-            HistoryInterval::Mo1 => Interval::Mo1,
+            HistoryInterval::Mo1 => Interval::M1,
         }
     }
 
     fn map_quote(symbol: &str, q: yfinance_rs::Quote) -> Quote {
-        let price = q
-            .price
-            .as_ref()
-            .map(money_to_f64)
-            .or_else(|| q.regular_market_price.as_ref().map(money_to_f64))
-            .unwrap_or(0.0);
-        let change = q
-            .regular_market_change
-            .as_ref()
-            .map(money_to_f64)
-            .unwrap_or(0.0);
-        let change_pct = q.regular_market_change_percent.unwrap_or(0.0);
-        let volume = q.regular_market_volume.unwrap_or(0) as u64;
-        let ts = q
-            .regular_market_time
-            .and_then(|t| Utc.timestamp_opt(t, 0).single())
-            .unwrap_or_else(Utc::now);
+        let price = q.price.as_ref().map(money_to_f64).unwrap_or(0.0);
+        let prev = q.previous_close.as_ref().map(money_to_f64).unwrap_or(price);
+        let change = price - prev;
+        let change_pct = if prev.abs() > f64::EPSILON {
+            (change / prev) * 100.0
+        } else {
+            0.0
+        };
+        let volume = q.day_volume.unwrap_or(0);
+        let ts = Utc::now();
 
         Quote {
             symbol: symbol.to_uppercase(),
@@ -86,10 +79,10 @@ impl MarketDataProvider for YahooProvider {
             return Err(ProviderError::NotFound(symbol.to_string()));
         }
 
-        if let Some(cache) = &self.cache {
-            if let Some(q) = cache.get(&sym) {
-                return Ok(q);
-            }
+        if let Some(cache) = &self.cache
+            && let Some(q) = cache.get(&sym)
+        {
+            return Ok(q);
         }
 
         let ticker = Ticker::new(&self.client, &sym);
@@ -173,11 +166,8 @@ impl MarketDataProvider for YahooProvider {
                 high: money_to_f64(&bar.high),
                 low: money_to_f64(&bar.low),
                 close: money_to_f64(&bar.close),
-                volume: bar.volume.unwrap_or(0) as u64,
-                timestamp: Utc
-                    .timestamp_opt(bar.ts, 0)
-                    .single()
-                    .unwrap_or_else(Utc::now),
+                volume: bar.volume.unwrap_or(0),
+                timestamp: bar.ts,
                 source: Some("yahoo".into()),
             })
             .collect())
