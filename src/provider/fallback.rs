@@ -3,6 +3,7 @@ use super::{
     chain_exhausted_message,
 };
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct FallbackProvider {
@@ -51,6 +52,23 @@ impl FallbackProvider {
             &errors.join("; "),
         )))
     }
+
+    fn normalize_symbols(symbols: &[String]) -> Vec<String> {
+        symbols
+            .iter()
+            .map(|s| s.trim().to_uppercase())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
+    fn merge_quotes(into: &mut HashMap<String, Quote>, quotes: Vec<Quote>, source: &str) {
+        for mut q in quotes {
+            if q.source.is_none() {
+                q.source = Some(source.to_string());
+            }
+            into.entry(q.symbol.to_uppercase()).or_insert(q);
+        }
+    }
 }
 
 #[async_trait]
@@ -64,33 +82,27 @@ impl MarketDataProvider for FallbackProvider {
     }
 
     async fn quotes(&self, symbols: &[String]) -> Result<Vec<Quote>, ProviderError> {
-        if symbols.is_empty() {
+        let normalized = Self::normalize_symbols(symbols);
+        if normalized.is_empty() {
             return Ok(vec![]);
         }
 
-        let mut errors = Vec::new();
+        let mut by_symbol: HashMap<String, Quote> = HashMap::with_capacity(normalized.len());
+        let mut batch_errors = Vec::new();
+
         for provider in &self.chain {
-            match provider.quotes(symbols).await {
-                Ok(mut quotes) => {
-                    if quotes.len() == symbols.len() {
-                        for q in &mut quotes {
-                            if q.source.is_none() {
-                                q.source = Some(provider.name().to_string());
-                            }
-                        }
-                        tracing::debug!(
-                            provider = provider.name(),
-                            count = quotes.len(),
-                            "batch quotes served by fallback chain"
-                        );
-                        return Ok(quotes);
+            match provider.quotes(&normalized).await {
+                Ok(quotes) => {
+                    tracing::debug!(
+                        provider = provider.name(),
+                        count = quotes.len(),
+                        requested = normalized.len(),
+                        "batch quotes from provider"
+                    );
+                    Self::merge_quotes(&mut by_symbol, quotes, provider.name());
+                    if by_symbol.len() == normalized.len() {
+                        break;
                     }
-                    errors.push(format!(
-                        "{}: partial batch ({} of {})",
-                        provider.name(),
-                        quotes.len(),
-                        symbols.len()
-                    ));
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -98,31 +110,40 @@ impl MarketDataProvider for FallbackProvider {
                         error = %e,
                         "batch quotes failed, trying next"
                     );
-                    errors.push(format!("{}: {e}", provider.name()));
+                    batch_errors.push(format!("{}: {e}", provider.name()));
                 }
             }
         }
 
-        // Per-symbol fallback for mixed failures
-        let mut out = Vec::with_capacity(symbols.len());
         let mut sym_errors = Vec::new();
-        for symbol in symbols {
-            match self.try_quote(symbol).await {
-                Ok(q) => out.push(q),
-                Err(e) => sym_errors.push(format!("{symbol}: {e}")),
+        for sym in &normalized {
+            if by_symbol.contains_key(sym) {
+                continue;
+            }
+            match self.try_quote(sym).await {
+                Ok(q) => {
+                    by_symbol.insert(sym.clone(), q);
+                }
+                Err(e) => sym_errors.push(format!("{sym}: {e}")),
             }
         }
-        if out.is_empty() {
-            let combined = if errors.is_empty() {
+
+        if by_symbol.is_empty() {
+            let combined = if batch_errors.is_empty() {
                 sym_errors.join("; ")
             } else {
-                format!("{} | {}", errors.join("; "), sym_errors.join("; "))
+                format!("{} | {}", batch_errors.join("; "), sym_errors.join("; "))
             };
             return Err(ProviderError::Unavailable(chain_exhausted_message(
                 &self.label,
                 &combined,
             )));
         }
+
+        let out: Vec<Quote> = normalized
+            .iter()
+            .filter_map(|sym| by_symbol.get(sym).cloned())
+            .collect();
         Ok(out)
     }
 
@@ -135,6 +156,14 @@ impl MarketDataProvider for FallbackProvider {
         let mut errors = Vec::new();
         for provider in &self.chain {
             match provider.historical(symbol, range, interval).await {
+                Ok(candles) if candles.is_empty() => {
+                    tracing::warn!(
+                        provider = provider.name(),
+                        symbol,
+                        "historical returned no bars, trying next"
+                    );
+                    errors.push(format!("{}: empty history", provider.name()));
+                }
                 Ok(mut candles) => {
                     for c in &mut candles {
                         if c.source.is_none() {
@@ -164,5 +193,172 @@ impl MarketDataProvider for FallbackProvider {
             &self.label,
             &errors.join("; "),
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    struct StubProvider {
+        name: &'static str,
+        quotes: HashMap<String, Quote>,
+        fail_batch: bool,
+        history_bars: usize,
+        fail_history: bool,
+    }
+
+    #[async_trait]
+    impl MarketDataProvider for StubProvider {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        async fn quote(&self, symbol: &str) -> Result<Quote, ProviderError> {
+            let sym = symbol.to_uppercase();
+            self.quotes
+                .get(&sym)
+                .cloned()
+                .ok_or_else(|| ProviderError::NotFound(sym))
+        }
+
+        async fn quotes(&self, symbols: &[String]) -> Result<Vec<Quote>, ProviderError> {
+            if self.fail_batch {
+                return Err(ProviderError::Unavailable("batch down".into()));
+            }
+            let mut out = Vec::new();
+            for sym in symbols {
+                if let Ok(q) = self.quote(sym).await {
+                    out.push(q);
+                }
+            }
+            if out.is_empty() {
+                Err(ProviderError::Unavailable("no quotes".into()))
+            } else {
+                Ok(out)
+            }
+        }
+
+        async fn historical(
+            &self,
+            symbol: &str,
+            _range: HistoryRange,
+            _interval: HistoryInterval,
+        ) -> Result<Vec<Candle>, ProviderError> {
+            if self.fail_history {
+                return Err(ProviderError::Unavailable("history down".into()));
+            }
+            if self.history_bars == 0 {
+                return Ok(vec![]);
+            }
+            Ok(vec![Candle {
+                symbol: symbol.to_uppercase(),
+                open: 1.0,
+                high: 2.0,
+                low: 0.5,
+                close: 1.5,
+                volume: 100,
+                timestamp: Utc::now(),
+                source: Some(self.name.into()),
+            }])
+        }
+    }
+
+    fn quote(sym: &str, price: f64, source: &str) -> Quote {
+        Quote {
+            symbol: sym.into(),
+            price,
+            change: 0.0,
+            change_pct: 0.0,
+            volume: 0,
+            timestamp: Utc::now(),
+            source: Some(source.into()),
+        }
+    }
+
+    #[tokio::test]
+    async fn merges_partial_batches_across_providers() {
+        let mut primary = HashMap::new();
+        primary.insert("AAPL".into(), quote("AAPL", 100.0, "primary"));
+
+        let mut fallback = HashMap::new();
+        fallback.insert("MSFT".into(), quote("MSFT", 200.0, "fallback"));
+
+        let chain = FallbackProvider::new(vec![
+            Arc::new(StubProvider {
+                name: "primary",
+                quotes: primary,
+                fail_batch: false,
+                history_bars: 0,
+                fail_history: true,
+            }),
+            Arc::new(StubProvider {
+                name: "fallback",
+                quotes: fallback,
+                fail_batch: false,
+                history_bars: 0,
+                fail_history: true,
+            }),
+        ]);
+
+        let out = chain.quotes(&["AAPL".into(), "MSFT".into()]).await.unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].symbol, "AAPL");
+        assert_eq!(out[1].symbol, "MSFT");
+    }
+
+    #[tokio::test]
+    async fn per_symbol_fill_when_batch_fails() {
+        let mut secondary = HashMap::new();
+        secondary.insert("NVDA".into(), quote("NVDA", 300.0, "secondary"));
+
+        let chain = FallbackProvider::new(vec![
+            Arc::new(StubProvider {
+                name: "primary",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: true,
+            }),
+            Arc::new(StubProvider {
+                name: "secondary",
+                quotes: secondary,
+                fail_batch: false,
+                history_bars: 0,
+                fail_history: true,
+            }),
+        ]);
+
+        let out = chain.quotes(&["NVDA".into()]).await.unwrap();
+        assert_eq!(out.len(), 1);
+        assert!((out[0].price - 300.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn historical_skips_empty_and_uses_next_provider() {
+        let chain = FallbackProvider::new(vec![
+            Arc::new(StubProvider {
+                name: "empty",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: false,
+            }),
+            Arc::new(StubProvider {
+                name: "good",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 1,
+                fail_history: false,
+            }),
+        ]);
+
+        let bars = chain
+            .historical("TSLA", HistoryRange::M3, HistoryInterval::D1)
+            .await
+            .unwrap();
+        assert_eq!(bars.len(), 1);
+        assert_eq!(bars[0].source.as_deref(), Some("good"));
     }
 }

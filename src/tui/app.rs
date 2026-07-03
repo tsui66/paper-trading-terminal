@@ -245,10 +245,22 @@ impl App {
     async fn refresh_quotes(&mut self) {
         let symbols = self.config.watchlist.symbols.clone();
         match self.provider.quotes(&symbols).await {
-            Ok(q) => {
-                self.quotes = q;
+            Ok(new_quotes) => {
+                let fetched = new_quotes.len();
+                for q in new_quotes {
+                    if let Some(existing) = self
+                        .quotes
+                        .iter_mut()
+                        .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
+                    {
+                        *existing = q;
+                    } else {
+                        self.quotes.push(q);
+                    }
+                }
                 self.log_lines.push(format!(
-                    "Quotes {} @ {}",
+                    "Quotes {}/{} @ {}",
+                    fetched,
                     symbols.len(),
                     chrono::Utc::now().format("%H:%M:%S")
                 ));

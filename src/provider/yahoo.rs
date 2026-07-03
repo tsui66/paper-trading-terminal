@@ -129,11 +129,22 @@ impl MarketDataProvider for YahooProvider {
         }
 
         let mut fetched = Vec::new();
+        let mut last_err = None;
         for sym in &missing {
-            fetched.push(self.quote(sym).await?);
+            match self.quote(sym).await {
+                Ok(q) => fetched.push(q),
+                Err(e) => {
+                    tracing::warn!(symbol = %sym, error = %e, "yahoo quote failed in batch");
+                    last_err = Some(e);
+                }
+            }
         }
 
         cached.extend(fetched);
+        if cached.is_empty() {
+            return Err(last_err
+                .unwrap_or_else(|| ProviderError::Unavailable("yahoo returned no quotes".into())));
+        }
         Ok(cached)
     }
 
