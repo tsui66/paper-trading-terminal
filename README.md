@@ -127,15 +127,6 @@ paper config provider-status
 
 `paper` accepts symbols like `AAPL`; the fcontext provider maps them to `AAPL.US` internally.
 
-### Troubleshooting
-
-| Problem | What to do |
-|---------|------------|
-| `CLI not found: fcontext` | Install fcontext (above) or set `provider.fcontext.cli` in `config.toml` |
-| `Missing fcontext credentials` | Run `fcontext auth login` |
-| `fcontext API error (401)` | Run `fcontext auth status`, then `fcontext auth login` again |
-| `fcontext subscription required (402)` | Upgrade Financial Context plan or use `paper config set-provider mock` for offline dev |
-
 More commands and agent-oriented JSON output: [fcontext CLI docs](https://docs.fcontext.com).
 
 ## Quick start
