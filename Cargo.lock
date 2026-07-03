@@ -1718,7 +1718,7 @@ dependencies = [
 
 [[package]]
 name = "paper-trading-terminal"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "ansi-parser",
  "anyhow",
