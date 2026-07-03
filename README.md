@@ -1,6 +1,6 @@
 # paper-trading-terminal
 
-**AI-native CLI for local US stock paper trading** — with real-time market data, portfolio, and trading. Every command `--json`-ready; Ratatui TUI for humans; `paper schema` as the agent contract.
+**AI-native CLI for US stock paper trading** — with real-time market data, portfolio, and trading.
 
 ## Features
 
@@ -14,7 +14,7 @@
 ## Requirements
 
 - Rust stable (2024 edition)
-- **fcontext** CLI on `PATH` when using the default provider chain (recommended for reliable quotes)
+- **fcontext** (optional) CLI on `PATH` when using the default provider chain (recommended for reliable quotes)
 - **Yahoo provider** (optional): `cargo build --features yahoo` — requires Rust ≥ 1.91
 
 ## Installation
@@ -200,6 +200,8 @@ paper config set-provider mock
 paper tui
 ```
 
+![Paper Trading Terminal TUI](docs/tui-screenshot.png)
+
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move watchlist selection |
@@ -296,6 +298,7 @@ let _schema = agent_schema();
 ```bash
 make test          # cargo test + mock CLI integration
 make lint          # fmt + clippy
+make screenshot    # regenerate docs/tui-screenshot.png
 ./scripts/test/test_fcontext.sh   # skips if fcontext CLI missing
 ```
 

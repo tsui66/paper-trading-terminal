@@ -1,0 +1,268 @@
+use anyhow::Result;
+use image::{ImageBuffer, Rgba, RgbaImage};
+use ratatui::{buffer::Buffer, style::Color};
+
+const CELL_W: u32 = 10;
+const CELL_H: u32 = 18;
+const BG: [u8; 3] = [15, 17, 21];
+
+pub fn buffer_to_png(buffer: &Buffer, path: &std::path::Path) -> Result<()> {
+    let width = buffer.area.width as u32 * CELL_W;
+    let height = buffer.area.height as u32 * CELL_H;
+    let mut img: RgbaImage =
+        ImageBuffer::from_fn(width, height, |_, _| Rgba([BG[0], BG[1], BG[2], 255]));
+
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            let cell = &buffer[(x, y)];
+            if cell.skip {
+                continue;
+            }
+            let fg = color_to_rgb(cell.fg, [220, 220, 220]);
+            let bg = color_to_rgb(cell.bg, BG);
+            let px = x as u32 * CELL_W;
+            let py = y as u32 * CELL_H;
+            fill_rect(&mut img, px, py, CELL_W, CELL_H, bg);
+            draw_symbol(&mut img, cell.symbol(), px, py, fg, bg);
+        }
+    }
+
+    img.save(path)?;
+    Ok(())
+}
+
+fn fill_rect(img: &mut RgbaImage, x: u32, y: u32, w: u32, h: u32, rgb: [u8; 3]) {
+    for dy in 0..h {
+        for dx in 0..w {
+            if let Some(p) = img.get_pixel_mut_checked(x + dx, y + dy) {
+                *p = Rgba([rgb[0], rgb[1], rgb[2], 255]);
+            }
+        }
+    }
+}
+
+fn draw_symbol(img: &mut RgbaImage, symbol: &str, x: u32, y: u32, fg: [u8; 3], bg: [u8; 3]) {
+    let Some(ch) = symbol.chars().next() else {
+        return;
+    };
+    if ch == ' ' {
+        return;
+    }
+    let code = ch as u32;
+    if (0x2800..=0x28FF).contains(&code) {
+        draw_braille(img, code - 0x2800, x, y, fg, bg);
+        return;
+    }
+    if ch == '─' {
+        fill_rect(img, x, y + CELL_H / 2, CELL_W, 1, fg);
+        return;
+    }
+    if ch == '│' {
+        fill_rect(img, x + CELL_W / 2, y, 1, CELL_H, fg);
+        return;
+    }
+    if matches!(ch, '┌' | '┐' | '└' | '┘' | '├' | '┤' | '┬' | '┴' | '┼') {
+        fill_rect(img, x, y + CELL_H / 2, CELL_W, 1, fg);
+        fill_rect(img, x + CELL_W / 2, y, 1, CELL_H, fg);
+        return;
+    }
+    if ch.is_ascii() && !ch.is_ascii_control() {
+        draw_ascii(img, ch as u8, x, y, fg);
+    } else {
+        fill_rect(img, x + 1, y + 2, CELL_W - 2, CELL_H - 4, fg);
+    }
+}
+
+fn draw_braille(img: &mut RgbaImage, pattern: u32, x: u32, y: u32, fg: [u8; 3], bg: [u8; 3]) {
+    let dot_w = 2u32;
+    let dot_h = 3u32;
+    let gap_x = 3u32;
+    let gap_y = 3u32;
+    let positions = [
+        (0, 0, 0x01),
+        (1, 0, 0x02),
+        (2, 0, 0x04),
+        (0, 1, 0x08),
+        (1, 1, 0x10),
+        (2, 1, 0x20),
+        (0, 2, 0x40),
+        (1, 2, 0x80),
+    ];
+    for (col, row, bit) in positions {
+        let color = if pattern & bit != 0 { fg } else { bg };
+        let px = x + 1 + col * gap_x;
+        let py = y + 2 + row * gap_y;
+        fill_rect(img, px, py, dot_w, dot_h, color);
+    }
+}
+
+fn draw_ascii(img: &mut RgbaImage, ch: u8, x: u32, y: u32, fg: [u8; 3]) {
+    let glyph = glyph_5x7(ch);
+    let scale_x = 1u32;
+    let scale_y = 2u32;
+    let offset_x = 1u32;
+    let offset_y = 2u32;
+    for (row, bits) in glyph.iter().enumerate() {
+        for col in 0..5 {
+            if bits & (1 << (4 - col)) != 0 {
+                fill_rect(
+                    img,
+                    x + offset_x + col * scale_x,
+                    y + offset_y + row as u32 * scale_y,
+                    scale_x,
+                    scale_y,
+                    fg,
+                );
+            }
+        }
+    }
+}
+
+fn color_to_rgb(color: Color, default: [u8; 3]) -> [u8; 3] {
+    match color {
+        Color::Reset => default,
+        Color::Black => [0, 0, 0],
+        Color::Red => [224, 85, 85],
+        Color::Green => [120, 198, 121],
+        Color::Yellow => [240, 198, 85],
+        Color::Blue => [95, 135, 255],
+        Color::Magenta => [198, 120, 221],
+        Color::Cyan => [86, 182, 194],
+        Color::Gray => [120, 124, 132],
+        Color::DarkGray => [90, 94, 102],
+        Color::LightRed => [255, 130, 130],
+        Color::LightGreen => [160, 230, 160],
+        Color::LightYellow => [255, 230, 140],
+        Color::LightBlue => [140, 175, 255],
+        Color::LightMagenta => [230, 160, 230],
+        Color::LightCyan => [140, 220, 230],
+        Color::White => [230, 230, 230],
+        Color::Rgb(r, g, b) => [r, g, b],
+        Color::Indexed(i) => indexed_color(i),
+    }
+}
+
+fn indexed_color(i: u8) -> [u8; 3] {
+    match i {
+        0..=15 => color_to_rgb(
+            [
+                Color::Black,
+                Color::Red,
+                Color::Green,
+                Color::Yellow,
+                Color::Blue,
+                Color::Magenta,
+                Color::Cyan,
+                Color::Gray,
+                Color::DarkGray,
+                Color::LightRed,
+                Color::LightGreen,
+                Color::LightYellow,
+                Color::LightBlue,
+                Color::LightMagenta,
+                Color::LightCyan,
+                Color::White,
+            ][i as usize],
+            BG,
+        ),
+        232..=255 => {
+            let v = (i - 232) * 10 + 8;
+            [v, v, v]
+        }
+        _ => {
+            let c = i - 16;
+            let r = if c / 36 == 0 { 0 } else { 55 + (c / 36) * 40 };
+            let g = if (c % 36) / 6 == 0 {
+                0
+            } else {
+                55 + ((c % 36) / 6) * 40
+            };
+            let b = if c % 6 == 0 { 0 } else { 55 + (c % 6) * 40 };
+            [r, g, b]
+        }
+    }
+}
+
+fn glyph_5x7(ch: u8) -> [u8; 7] {
+    match ch {
+        b' ' => [0, 0, 0, 0, 0, 0, 0],
+        b'!' => [0x04, 0x04, 0x04, 0x04, 0x00, 0x04, 0x00],
+        b'"' => [0x0A, 0x0A, 0x0A, 0x00, 0x00, 0x00, 0x00],
+        b'#' => [0x0A, 0x1F, 0x0A, 0x1F, 0x0A, 0x00, 0x00],
+        b'$' => [0x04, 0x0F, 0x14, 0x0E, 0x05, 0x1E, 0x04],
+        b'%' => [0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03],
+        b'&' => [0x0C, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0D],
+        b'\'' => [0x04, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00],
+        b'(' => [0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02],
+        b')' => [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
+        b'*' => [0x00, 0x04, 0x15, 0x0E, 0x15, 0x04, 0x00],
+        b'+' => [0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00],
+        b',' => [0x00, 0x00, 0x00, 0x00, 0x04, 0x04, 0x08],
+        b'-' => [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00],
+        b'.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00],
+        b'/' => [0x01, 0x02, 0x04, 0x08, 0x10, 0x00, 0x00],
+        b'0'..=b'9' => *DIGITS.get((ch - b'0') as usize).unwrap_or(&[0; 7]),
+        b':' => [0x00, 0x04, 0x00, 0x00, 0x04, 0x00, 0x00],
+        b';' => [0x00, 0x04, 0x00, 0x00, 0x04, 0x04, 0x08],
+        b'<' => [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+        b'=' => [0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00],
+        b'>' => [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08],
+        b'?' => [0x0E, 0x11, 0x02, 0x04, 0x00, 0x04, 0x00],
+        b'@' => [0x0E, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0E],
+        b'A'..=b'Z' => *LETTERS.get((ch - b'A') as usize).unwrap_or(&[0; 7]),
+        b'[' => [0x0E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0E],
+        b'\\' => [0x10, 0x08, 0x04, 0x02, 0x01, 0x00, 0x00],
+        b']' => [0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E],
+        b'^' => [0x04, 0x0A, 0x11, 0x00, 0x00, 0x00, 0x00],
+        b'_' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F],
+        b'`' => [0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00],
+        b'a'..=b'z' => *LETTERS.get((ch - b'a') as usize).unwrap_or(&[0; 7]),
+        b'{' => [0x06, 0x08, 0x08, 0x10, 0x08, 0x08, 0x06],
+        b'|' => [0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+        b'}' => [0x0C, 0x02, 0x02, 0x01, 0x02, 0x02, 0x0C],
+        b'~' => [0x00, 0x08, 0x15, 0x02, 0x00, 0x00, 0x00],
+        _ => [0x0E, 0x11, 0x15, 0x15, 0x11, 0x11, 0x0E],
+    }
+}
+
+const DIGITS: [[u8; 7]; 10] = [
+    [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E],
+    [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+    [0x0E, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1F],
+    [0x1F, 0x01, 0x02, 0x06, 0x01, 0x11, 0x0E],
+    [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02],
+    [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
+    [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E],
+    [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+    [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E],
+    [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
+];
+
+const LETTERS: [[u8; 7]; 26] = [
+    [0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+    [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E],
+    [0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E],
+    [0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E],
+    [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F],
+    [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10],
+    [0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F],
+    [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+    [0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E],
+    [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C],
+    [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11],
+    [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
+    [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11],
+    [0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11],
+    [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+    [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
+    [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D],
+    [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11],
+    [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E],
+    [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+    [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+    [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04],
+    [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A],
+    [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
+    [0x11, 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04],
+    [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F],
+];
