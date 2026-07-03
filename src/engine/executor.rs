@@ -117,7 +117,16 @@ impl MockExecutor {
 
             if should_fill {
                 let qty = order.qty;
-                Self::apply_fill(&mut order, qty, limit, commission.max(self.commission));
+                let fill_price = match order.side {
+                    OrderSide::Buy => market_price.min(limit),
+                    OrderSide::Sell => market_price.max(limit),
+                };
+                Self::apply_fill(
+                    &mut order,
+                    qty,
+                    fill_price,
+                    commission.max(self.commission),
+                );
                 filled.push(order);
             } else {
                 remaining.push(order);
@@ -126,6 +135,12 @@ impl MockExecutor {
 
         self.pending_orders = remaining;
         filled
+    }
+
+    pub fn requeue_pending(&mut self, order: Order) {
+        if order.is_pending() {
+            self.pending_orders.push(order);
+        }
     }
 
     fn apply_fill(order: &mut Order, qty: f64, price: f64, commission: f64) {
@@ -145,6 +160,8 @@ mod tests {
     fn test_executor() -> MockExecutor {
         MockExecutor::new(&TradingConfig {
             commission_per_trade: 0.0,
+            commission_bps: 0.0,
+            min_commission: 0.0,
             slippage_bps: 0.0,
         })
     }
@@ -156,7 +173,7 @@ mod tests {
             .unwrap();
         let filled = ex.process_limit_fills("AAPL", 199.0, 0.0);
         assert_eq!(filled.len(), 1);
-        assert!((filled[0].avg_fill_price - 200.0).abs() < f64::EPSILON);
+        assert!((filled[0].avg_fill_price - 199.0).abs() < f64::EPSILON);
         assert!(ex.pending_orders().is_empty());
     }
 

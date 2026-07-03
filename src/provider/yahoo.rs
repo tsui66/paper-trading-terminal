@@ -139,6 +139,8 @@ impl YahooProvider {
             }
         };
 
+        let status = q.market_state.map(|state| state.full_name().to_string());
+
         Quote {
             symbol: sym,
             price,
@@ -146,6 +148,8 @@ impl YahooProvider {
             change_pct,
             volume,
             timestamp: ts,
+            name: q.name.clone(),
+            status,
             source: Some("yahoo".into()),
         }
     }

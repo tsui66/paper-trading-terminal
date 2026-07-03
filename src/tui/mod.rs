@@ -1,5 +1,7 @@
 mod app;
+mod kline;
 mod order_entry;
+mod ui;
 mod widgets;
 
 use crate::config::AppConfig;
@@ -7,7 +9,7 @@ use crate::db::Database;
 use crate::provider::{QuoteCache, create_provider_stack};
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -15,6 +17,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::{self, stdout};
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
     let config = AppConfig::load(config_path.as_deref())?;
@@ -26,26 +29,21 @@ pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
 
     let tick_rate = Duration::from_millis(500);
     let mut last_tick = std::time::Instant::now();
+    let (_key_tx, mut key_rx) = spawn_key_listener();
 
     let loop_result: Result<()> = loop {
         terminal.draw(|f| app.render(f))?;
 
-        let timeout = tick_rate
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| Duration::from_secs(0));
-
-        #[allow(clippy::collapsible_if)]
-        if crossterm::event::poll(timeout)? {
-            match event::read()? {
-                Event::Key(key) => app.handle_key(key.code),
-                Event::Resize(_, _) => {}
-                _ => {}
-            }
+        app.drain_keys(&mut key_rx);
+        if app.should_quit {
+            break Ok(());
         }
 
         if last_tick.elapsed() >= tick_rate {
-            app.on_tick().await;
             last_tick = std::time::Instant::now();
+            app.on_tick(&mut key_rx).await;
+        } else {
+            tokio::time::sleep(Duration::from_millis(16)).await;
         }
 
         if app.should_quit {
@@ -55,6 +53,32 @@ pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
 
     teardown_terminal(terminal)?;
     loop_result
+}
+
+fn spawn_key_listener() -> (UnboundedSender<KeyCode>, UnboundedReceiver<KeyCode>) {
+    let (tx, rx) = unbounded_channel();
+    let listener_tx = tx.clone();
+    std::thread::spawn(move || {
+        loop {
+            match event::poll(Duration::from_millis(50)) {
+                Ok(true) => {
+                    match event::read() {
+                        Ok(Event::Key(key)) => {
+                            if listener_tx.send(key.code).is_err() {
+                                break;
+                            }
+                        }
+                        Ok(Event::Resize(_, _)) => {}
+                        Ok(_) => {}
+                        Err(_) => break,
+                    }
+                }
+                Ok(false) => {}
+                Err(_) => break,
+            }
+        }
+    });
+    (tx, rx)
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {

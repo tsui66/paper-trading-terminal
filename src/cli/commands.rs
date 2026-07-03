@@ -1,4 +1,6 @@
+use crate::config::TradingConfig;
 use crate::engine::TradingEngine;
+use crate::engine::market_rules;
 use crate::engine::order::{OrderSide, OrderType};
 use crate::provider::{HistoryInterval, HistoryRange};
 use crate::utils::{normalize_symbol, output_json};
@@ -358,7 +360,7 @@ async fn cmd_trade(
     if cli.json {
         output_json(&order)?;
     } else {
-        print_order_line(&order);
+        print_order_line(&order, &engine.config().trading);
     }
     Ok(())
 }
@@ -402,7 +404,7 @@ async fn cmd_orders(cli: &Cli, engine: &TradingEngine) -> Result<()> {
     Ok(())
 }
 
-fn print_order_line(order: &crate::engine::order::Order) {
+fn print_order_line(order: &crate::engine::order::Order, trading: &TradingConfig) {
     let typ = match order.order_type {
         OrderType::Market => "MKT",
         OrderType::Limit => "LMT",
@@ -415,13 +417,17 @@ fn print_order_line(order: &crate::engine::order::Order) {
             order.limit_price.unwrap_or(0.0)
         );
     } else {
-        println!(
-            "{} {typ} {} {:.2} @ ${:.2} (commission ${:.2})",
-            format!("{:?}", order.status).to_uppercase(),
-            format!("{:?}", order.side).to_uppercase(),
+        let fees = market_rules::compute_trade_fees(
+            &order.symbol,
+            order.side,
             order.filled_qty,
             order.avg_fill_price,
-            order.commission
+            trading,
+        );
+        println!(
+            "{} {typ} {}",
+            format!("{:?}", order.status).to_uppercase(),
+            market_rules::format_fill_log(order, fees)
         );
     }
 }

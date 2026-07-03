@@ -1,45 +1,78 @@
 # paper-trading-terminal
 
+**Languages:** English · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
 **AI-native CLI for US stock paper trading** — with real-time market data, portfolio, and trading.
 
 ## Features
 
-- **Paper account** — cash, positions, mark-to-market PnL, persisted in SQLite
-- **Orders** — market and limit buy/sell, cancel, auto-fill when price crosses limit
+- **Paper account** — cash, positions, mark-to-market PnL, persisted in SQLite; TUI reset (`z`) restores `initial_cash` and clears positions/orders
+- **Orders** — market and limit buy/sell, cancel, auto-fill when price crosses limit; pending orders show fill price and fees in the TUI
+- **Realistic simulation** — session-aware execution (regular / pre / after-hours / closed), lot sizes, A-share price bands & T+1 sell lock, per-market regulatory fees + configurable broker commission
 - **Market data** — Yahoo first, fcontext CLI fallback; fails loudly if both are down
-- **TUI** — watchlist, Braille candlestick chart, in-app order entry, fill notifications
+- **TUI** — adaptive layout (resizes panels & compact text on smaller terminals), watchlist, Braille candlestick chart with page scroll, in-app order entry, fill notifications
 - **AI-native** — structured JSON I/O, `paper schema` for tool discovery, `AgentSkill` for Rust embeds
 - **Rust library** — embed via `AgentSkill` and `TradingEngine`
 
 ## Requirements
 
-- Rust stable ≥ 1.91 (2024 edition; Yahoo enabled by default)
-- **fcontext** CLI on `PATH` for fallback when Yahoo is unavailable
+- **paper** binary on `PATH` (see [Install & run](#install--run) below)
+- **fcontext** CLI — *optional*; used as fallback when Yahoo is unavailable
 
-## Installation
+Build from source additionally needs Rust stable ≥ 1.91 (Yahoo enabled by default).
 
-**Install script (macOS / Linux)** — recommended; no tap or build required:
+### AI agent install (Claude / Codex / OpenClaw)
+
+Prefer letting a coding agent install and verify for you. Copy a prompt from **[docs/agent-install.md](docs/agent-install.md)** into Claude Code, Codex, or OpenClaw — the agent should run the installer and confirm `paper quote AAPL` works.
+
+<details>
+<summary>Quick copy — universal install prompt</summary>
+
+```text
+Install the paper-trading-terminal CLI (`paper`) on this machine.
+
+Project: https://github.com/tsui66/paper-trading-terminal
+
+Rules:
+- Detect OS yourself and run the official installer (do not only print commands).
+- macOS/Linux: curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+- Windows PowerShell: iwr https://github.com/tsui66/paper-trading-terminal/raw/main/install.ps1 | iex
+
+Verify: paper -h → paper config provider-status → paper quote AAPL → paper account.
+Retry with Homebrew / Scoop / cargo build --release if the script fails.
+Report install path and verification output. fcontext is optional unless Yahoo fails.
+```
+
+More prompts (per-agent wording, fcontext fallback, JSON tool wiring): [docs/agent-install.md](docs/agent-install.md).
+
+</details>
+
+## Install & run
+
+Follow the steps in order. Each step prints hints — match them to confirm success.
+
+### Step 1 — Install `paper`
+
+Pick your platform and run **one** command.
+
+**macOS / Linux (recommended)**
 
 ```bash
 curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
 ```
 
-Installs `paper` to `/usr/local/bin` (macOS/Linux) or `%LOCALAPPDATA%\Programs\paper` (Windows).
+You should see:
 
-**Homebrew (macOS / Linux)** — after you publish a tap (see below):
+```text
+Installing paper-trading-terminal@v…
+Downloading https://github.com/tsui66/paper-trading-terminal/releases/download/…
+paper CLI v… installed to /usr/local/bin/paper
 
-```bash
-brew install --cask tsui66/tap/paper-trading-terminal
-```
-
-`<org>` in `org/tap/...` is your **GitHub username or org** that owns the `homebrew-tap` repo. For this project that is **`tsui66`** → tap URL `https://github.com/tsui66/homebrew-tap`, install name `tsui66/tap/paper-trading-terminal`.
-
-One-time tap setup (maintainers): copy [`.homebrew/Casks/paper-trading-terminal.rb`](.homebrew/Casks/paper-trading-terminal.rb) into `homebrew-tap/Casks/`, update `version` and `sha256` per [GitHub Release](https://github.com/tsui66/paper-trading-terminal/releases), then users can run the command above.
-
-**Windows ([Scoop](https://scoop.sh))**
-
-```powershell
-scoop install https://github.com/tsui66/paper-trading-terminal/raw/refs/heads/main/.scoop/paper.json
+Next steps:
+  paper -h                      # verify install
+  paper config provider-status  # check yahoo + fcontext (optional)
+  paper quote AAPL              # test live quote
+  paper tui                     # launch dashboard
 ```
 
 **Windows (PowerShell)**
@@ -48,108 +81,151 @@ scoop install https://github.com/tsui66/paper-trading-terminal/raw/refs/heads/ma
 iwr https://github.com/tsui66/paper-trading-terminal/raw/main/install.ps1 | iex
 ```
 
-Override the GitHub repo for forks/self-hosted releases:
+You should see `paper CLI v… installed` and (first time) `Added …\Programs\paper to your PATH`. **Restart the terminal** if `paper` is not found.
+
+<details>
+<summary>Other install methods</summary>
+
+**Homebrew (macOS / Linux)**
 
 ```bash
-PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+brew install --cask tsui66/tap/paper-trading-terminal
 ```
 
-### Build from source
+**Windows ([Scoop](https://scoop.sh))**
+
+```powershell
+scoop install https://github.com/tsui66/paper-trading-terminal/raw/refs/heads/main/.scoop/paper.json
+```
+
+**Build from source** (needs Rust ≥ 1.91)
 
 ```bash
 git clone https://github.com/tsui66/paper-trading-terminal
 cd paper-trading-terminal
 cargo build --release
-# binary: target/release/paper
+# binary: ./target/release/paper
 make install-local   # optional: copy to /usr/local/bin
 ```
 
-## fcontext CLI
+Fork or self-hosted releases:
 
-`paper` uses the [Financial Context](https://docs.fcontext.com) CLI as the **fallback market-data provider** when Yahoo is unavailable. Install and sign in once; `paper` shells out to `fcontext` (or `fctx`) automatically.
+```bash
+PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+```
 
-### Install
+</details>
 
-**macOS (Homebrew)**
+### Step 2 — Verify `paper`
+
+```bash
+paper -h
+paper config provider-status
+```
+
+Expected: help text prints; `yahoo` shows **ok** (primary). `fcontext` may show **missing** until Step 4 — that is fine for a first run.
+
+```bash
+paper quote AAPL
+```
+
+Expected: a line with price and change, e.g. `AAPL  $…  +….%  [yahoo]`.
+
+### Step 3 — Run
+
+```bash
+paper account          # cash & equity
+paper tui              # interactive dashboard
+```
+
+In the TUI: `j`/`k` move the watchlist, `b`/`s` buy/sell, `Tab` switch chart period, `←`/`→` flip chart pages (older / newer), `z` reset account (double-confirm), `q` quit.
+
+**Paper trading (CLI)**
+
+```bash
+paper buy AAPL --qty 10
+paper buy MSFT --qty 5 --limit 500   # limit order — pending until price hits
+paper orders
+paper cancel <order-id-prefix>
+paper portfolio --json
+```
+
+### Step 4 — (Optional) Install fcontext fallback
+
+Skip this if Yahoo quotes already work. Install fcontext when:
+
+- `paper config provider-status` shows `fcontext: missing` and you want a backup source
+- Yahoo is flaky and quotes fail intermittently
+- You need symbols or data Yahoo does not cover
+
+`paper` shells out to `fcontext` (or `fctx`) automatically — no extra config beyond `config.toml` defaults.
+
+**4a. Install the CLI**
+
+macOS (Homebrew):
 
 ```bash
 brew install --cask aitaport/tap/fcontext-cli
 ```
 
-**Linux / macOS (script)**
+Linux / macOS (script):
 
 ```bash
 curl -sSL https://github.com/aitaport/fcontext-cli/releases/latest/download/install.sh | sh
 ```
 
-**Windows (Scoop)**
-
-```powershell
-scoop install https://github.com/aitaport/fcontext-cli/releases/latest/download/fcontext.json
-```
-
-**Windows (PowerShell)**
+Windows (PowerShell):
 
 ```powershell
 iwr https://github.com/aitaport/fcontext-cli/releases/latest/download/install.ps1 | iex
 ```
 
-Installers verify the release `.sha256` checksum and place both `fcontext` and `fctx` on your `PATH`.
+Windows (Scoop):
 
-### Authenticate
+```powershell
+scoop install https://github.com/aitaport/fcontext-cli/releases/latest/download/fcontext.json
+```
 
-Sign in with OAuth (works in local terminals, SSH, and headless servers):
+You should have `fcontext` (and `fctx`) on `PATH`:
+
+```bash
+fcontext -h
+```
+
+**4b. Sign in (one time)**
 
 ```bash
 fcontext auth login
 ```
 
-Open the printed URL in a browser, authorize, then redeem the code:
+Open the URL in a browser, authorize, then:
 
 ```bash
 fcontext auth login --auth-code YOUR_CODE
 ```
 
-The CLI stores the token locally (`oauth-token.json` in the fcontext config directory). Later commands reuse it automatically.
-
-Check status or sign out:
+Check:
 
 ```bash
 fcontext auth status
-fcontext auth status --format json
-fcontext auth logout
+fcontext check
 ```
 
-### Verify
+**4c. Verify with `paper`**
 
 ```bash
-fcontext check
 fcontext quote AAPL.US --format json
 paper config provider-status
+paper quote AAPL
 ```
 
-`paper` accepts symbols like `AAPL`; the fcontext provider maps them to `AAPL.US` internally.
+Expected: `fcontext` shows **ok** in provider-status; quotes may show `[yahoo]` or `[fcontext]` depending on which provider answered.
 
-More commands and agent-oriented JSON output: [fcontext CLI docs](https://docs.fcontext.com).
+`paper` accepts `AAPL`; fcontext uses `AAPL.US` internally.
 
-## Quick start
+More: [fcontext CLI docs](https://docs.fcontext.com).
 
-```bash
-# Account & quotes
-paper account
-paper quote AAPL MSFT
-paper portfolio --json
-
-# Trade
-paper buy AAPL --qty 10
-paper buy MSFT --qty 5 --limit 500    # limit order (pending until price hits)
-paper orders
-paper cancel <order-id-prefix>
-paper pnl
-
-# Dashboard
-paper tui
-```
+## Quick reference
 
 Global flags (all commands):
 
@@ -198,20 +274,29 @@ paper tui
 
 ![Paper Trading Terminal TUI](docs/tui-screenshot.png)
 
+The dashboard adapts to terminal size: panel widths, row heights, and table text scale automatically on smaller windows (recommended minimum ~80×24). Shortcut hints in the footer shrink in compact mode.
+
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Move watchlist selection |
+| `j` / `k` or `↓` / `↑` | Move watchlist selection |
+| `Enter` | Select highlighted watchlist symbol (loads chart) |
+| `Tab` / `Shift-Tab` | Chart period (1m … Year); resets chart to latest page |
+| `←` / `→` | Chart pages — **one key press = one full screen** of bars (← older, → newer) |
 | `b` / `s` | Buy / sell selected symbol |
 | `m` | Toggle market / limit in order bar |
-| `Tab` | Switch qty / limit field |
-| `Enter` | Submit order |
-| `Esc` | Cancel order entry |
-| `n` | Select pending order |
+| `Enter` | Submit order (when order bar is active) |
+| `Esc` | Cancel order entry, or cancel account-reset confirm |
+| `n` | Cycle selected pending order |
 | `x` | Cancel selected pending order |
+| `z` | Reset account — press twice to confirm; restores `initial_cash`, clears positions & orders |
 | `r` | Refresh quotes and chart |
 | `q` | Quit |
 
-Limit fills ring the terminal bell and log `*** FILLED ***`.
+**Panels:** watchlist (left), candlestick chart (center), holdings + pending orders (right), log, order/shortcut bar (bottom). Orders table columns include symbol, side, type, qty, fill price, fee, and status; a detail line shows the selected order.
+
+**Chart navigation:** page 0 shows the most recent bars. `←` loads the previous (older) page; older history is fetched on demand. `→` returns toward the latest page. Arrow keys are ignored while the order entry bar is open (`Esc` to exit).
+
+Limit fills ring the terminal bell and log `*** FILLED ***` with fee breakdown.
 
 ## CLI reference
 
@@ -238,6 +323,30 @@ Limit fills ring the terminal bell and log `*** FILLED ***`.
 **Ranges:** `d1` `d5` `m1` `m3` `m6` `y1` `y5`  
 **Intervals:** `m1` `m5` `m15` `m30` `h1` `d1` `w1` `mo1`
 
+## Trading simulation
+
+Paper fills respect market rules derived from the symbol suffix and live quote session status:
+
+| Rule | US | HK | A-share (`.SH` / `.SZ`) |
+|------|----|----|-------------------------|
+| Lot size | 1 share | 100 shares (default) | 100 shares |
+| T+1 sell lock | No | No | Yes — bought shares locked until next session |
+| Extended hours | Pre/after market orders allowed | Limit queue when closed | Follows CN session |
+| Price bands | — | — | ±10% (±5% for ST names) on limit orders |
+| Regulatory fees | SEC / FINRA on sells | Stamp duty, levies | Stamp duty, transfer fee |
+
+Platform commission is configurable; regulatory fees are always modeled:
+
+```toml
+[trading]
+commission_per_trade = 0.0   # flat per order
+commission_bps = 0.0         # notional bps (1 bps = 0.01%)
+min_commission = 0.0
+slippage_bps = 5.0
+```
+
+When the exchange is **closed**, market orders are rejected; limit orders may queue. **Halted** or **suspended** symbols reject all orders.
+
 ## Configuration
 
 `config.toml` at the project root (or path from `--config` / `PAPER_CONFIG`):
@@ -249,7 +358,9 @@ currency = "USD"
 
 [trading]
 commission_per_trade = 0.0
-slippage_bps = 5
+commission_bps = 0.0
+min_commission = 0.0
+slippage_bps = 5.0
 
 [cache]
 enabled = true
@@ -261,7 +372,11 @@ symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 
 Copy `.env.example` for optional env overrides and `RUST_LOG`. fcontext auth is managed by the `fcontext` CLI, not `paper`.
 
+Account reset is available in the TUI (`z`, double-confirm) only — there is no CLI `reset` command yet.
+
 ## Agents & library
+
+**Install via agent:** [docs/agent-install.md](docs/agent-install.md) — copy-paste prompts for Claude Code, Codex, and OpenClaw.
 
 Discover the CLI contract:
 
@@ -312,9 +427,9 @@ Push a `v*` tag to trigger [`.github/workflows/release.yml`](.github/workflows/r
 ```
 src/
   cli/          # Clap commands
-  engine/       # TradingEngine, orders, fills
+  engine/       # TradingEngine, orders, fills, market_rules, tradability
   provider/     # yahoo, fcontext, fallback chain
-  tui/          # Ratatui dashboard
+  tui/          # Ratatui dashboard (ui/layout adaptive sizing, kline pagination)
   skill.rs      # AgentSkill + schema
 data/           # SQLite DBs (gitignored), test configs
 scripts/

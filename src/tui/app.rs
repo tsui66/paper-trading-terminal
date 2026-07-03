@@ -1,25 +1,37 @@
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::engine::TradingEngine;
+use crate::engine::market_rules;
 use crate::engine::order::OrderSide;
-use crate::provider::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote, fetch_quotes_report,
-    format_quote_failure_log,
-};
+use crate::provider::{MarketDataProvider, Quote, fetch_quotes_report, format_quote_failure_log};
+use crate::tui::kline::{AdjustType, KlineStore, KlineType};
+use crate::tui::ui::{layout::UiLayout, styles};
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
-use crate::tui::widgets::chart::CandlestickChart;
+use crate::tui::widgets::chart::{klines_to_cli, render_kline_chart};
+use crate::tui::widgets::orders;
+use crate::tui::widgets::positions;
+use crate::tui::widgets::watchlist;
+use uuid::Uuid;
 use crate::utils::terminal_bell;
 use anyhow::Result;
 use crossterm::event::KeyCode;
+use std::future::Future;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::UnboundedReceiver;
+
+/// Quote, kline, equity, and order-mark refresh cadence.
+const DATA_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+const ORDER_DISPLAY_LIMIT: usize = 24;
+const SHORTCUTS_HINT: &str =
+    "b buy | s sell | j/k watchlist | Tab period | ←/→ chart | n order | x cancel | z reset | r refresh | q quit";
 
 pub struct App {
     pub should_quit: bool,
@@ -27,19 +39,21 @@ pub struct App {
     provider: Arc<dyn MarketDataProvider>,
     engine: TradingEngine,
     quotes: Vec<Quote>,
-    chart_candles: Vec<Candle>,
+    kline_store: KlineStore,
+    kline_type: KlineType,
+    /// Chart page index: 0 = latest bars, higher = older history.
+    kline_index: usize,
     chart_symbol: Option<String>,
     watchlist_idx: usize,
     orders_idx: usize,
     equity: f64,
     log_lines: Vec<String>,
-    refresh_pending: bool,
-    chart_pending: bool,
-    cancel_order_idx: Option<usize>,
+    cancel_order_id: Option<Uuid>,
     order_entry: Option<OrderEntry>,
     pending_submit: Option<SubmitRequest>,
-    last_quote_refresh: Instant,
-    quote_refresh_interval: Duration,
+    last_data_refresh: Instant,
+    refresh_log: bool,
+    reset_confirm: bool,
 }
 
 impl App {
@@ -53,7 +67,7 @@ impl App {
         let chart_symbol = config.watchlist.symbols.first().cloned();
         let mut log_lines = vec![
             "Paper Trading Terminal".into(),
-            "j/k:watchlist b:buy s:sell m:market/limit x:cancel r:refresh q:quit".into(),
+            SHORTCUTS_HINT.into(),
         ];
         if engine.provider().name().contains("(disabled)") {
             log_lines.push(
@@ -62,31 +76,36 @@ impl App {
                     .into(),
             );
         }
+        let kline_store = KlineStore::new(provider.clone());
         Ok(Self {
             should_quit: false,
             config,
             provider,
             engine,
             quotes: Vec::new(),
-            chart_candles: Vec::new(),
+            kline_store,
+            kline_type: KlineType::PerDay,
+            kline_index: 0,
             chart_symbol,
             watchlist_idx: 0,
             orders_idx: 0,
             equity: initial_cash,
             log_lines,
-            refresh_pending: true,
-            chart_pending: true,
-            cancel_order_idx: None,
+            cancel_order_id: None,
             order_entry: None,
             pending_submit: None,
-            last_quote_refresh: Instant::now(),
-            quote_refresh_interval: Duration::from_secs(5),
+            last_data_refresh: Instant::now() - DATA_REFRESH_INTERVAL,
+            refresh_log: true,
+            reset_confirm: false,
         })
     }
 
     pub fn request_refresh(&mut self) {
-        self.refresh_pending = true;
-        self.chart_pending = true;
+        self.refresh_log = true;
+        self.last_data_refresh = Instant::now() - DATA_REFRESH_INTERVAL;
+        if let Some(sym) = self.chart_symbol.as_deref() {
+            self.kline_store.invalidate_symbol(sym);
+        }
     }
 
     pub fn handle_key(&mut self, code: KeyCode) {
@@ -110,8 +129,30 @@ impl App {
             }
         }
 
+        if code == KeyCode::Esc && self.reset_confirm {
+            self.reset_confirm = false;
+            self.log_lines.push("Account reset cancelled".into());
+            return;
+        }
+
         match code {
-            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+            }
+            KeyCode::Tab => {
+                self.kline_type = self.kline_type.next();
+                self.kline_index = 0;
+            }
+            KeyCode::BackTab => {
+                self.kline_type = self.kline_type.prev();
+                self.kline_index = 0;
+            }
+            KeyCode::Left => {
+                self.kline_index = self.kline_index.saturating_add(1);
+            }
+            KeyCode::Right => {
+                self.kline_index = self.kline_index.saturating_sub(1);
+            }
             KeyCode::Char('r') => self.request_refresh(),
             KeyCode::Char('b') => self.start_order(OrderSide::Buy),
             KeyCode::Char('s') => self.start_order(OrderSide::Sell),
@@ -126,19 +167,41 @@ impl App {
                 self.watchlist_idx = self.watchlist_idx.saturating_sub(1);
                 self.select_watchlist(self.watchlist_idx);
             }
-            KeyCode::Char('x') => {
-                if !self.engine.pending_orders().is_empty() {
-                    self.cancel_order_idx = Some(self.orders_idx);
-                }
-            }
+            KeyCode::Char('x') => self.cancel_selected_order(),
             KeyCode::Enter => self.select_watchlist(self.watchlist_idx),
-            KeyCode::Char('n') | KeyCode::Tab => {
-                let n = self.engine.pending_orders().len();
+            KeyCode::Char('n') => {
+                let n = self.display_orders().len();
                 if n > 0 {
                     self.orders_idx = (self.orders_idx + 1) % n;
                 }
             }
+            KeyCode::Char('z') => self.handle_reset_key(),
             _ => {}
+        }
+    }
+
+    fn handle_reset_key(&mut self) {
+        if self.reset_confirm {
+            match self.engine.reset_account() {
+                Ok(cash) => {
+                    self.reset_confirm = false;
+                    self.orders_idx = 0;
+                    self.equity = cash;
+                    self.log_lines.push(format!(
+                        "Account reset — cash=${cash:.0}, positions & orders cleared"
+                    ));
+                }
+                Err(e) => {
+                    self.reset_confirm = false;
+                    self.log_lines.push(format!("Reset failed: {e}"));
+                }
+            }
+        } else {
+            self.reset_confirm = true;
+            let cash = self.engine.config().account.initial_cash;
+            self.log_lines.push(format!(
+                "Press z again to reset account to ${cash:.0} (clears positions & orders), Esc cancel"
+            ));
         }
     }
 
@@ -155,22 +218,59 @@ impl App {
     fn select_watchlist(&mut self, idx: usize) {
         if let Some(sym) = self.config.watchlist.symbols.get(idx).cloned() {
             self.chart_symbol = Some(sym);
-            self.chart_pending = true;
+            self.kline_index = 0;
         }
     }
 
-    pub async fn on_tick(&mut self) {
-        if let Some(req) = self.pending_submit.take() {
-            self.execute_order(req).await;
+    pub fn drain_keys(&mut self, rx: &mut UnboundedReceiver<KeyCode>) {
+        while let Ok(code) = rx.try_recv() {
+            self.handle_key(code);
+        }
+    }
+
+    async fn wait_or_quit<T, F>(&mut self, rx: &mut UnboundedReceiver<KeyCode>, fut: F) -> Option<T>
+    where
+        F: Future<Output = T>,
+    {
+        tokio::pin!(fut);
+        loop {
+            tokio::select! {
+                res = &mut fut => return Some(res),
+                () = tokio::time::sleep(Duration::from_millis(50)) => {
+                    self.drain_keys(rx);
+                    if self.should_quit {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn on_tick(&mut self, key_rx: &mut UnboundedReceiver<KeyCode>) {
+        self.drain_keys(key_rx);
+        if self.should_quit {
+            return;
         }
 
-        let cancel_target = self.cancel_order_idx.take().and_then(|idx| {
-            self.engine
+        if let Some(req) = self.pending_submit.take() {
+            self.execute_order(req, key_rx).await;
+            if self.should_quit {
+                return;
+            }
+        }
+
+        if let Some(id) = self.cancel_order_id.take() {
+            let sym = self
+                .engine
                 .pending_orders()
-                .get(idx)
-                .map(|order| (order.id, order.symbol.clone()))
-        });
-        if let Some((id, sym)) = cancel_target {
+                .iter()
+                .find(|o| o.id == id)
+                .map(|o| o.symbol.clone())
+                .unwrap_or_default();
+            self.drain_keys(key_rx);
+            if self.should_quit {
+                return;
+            }
             match self.engine.cancel_order(&id).await {
                 Ok(o) => self.log_lines.push(format!(
                     "Cancelled {sym} limit @ ${:.2}",
@@ -179,44 +279,87 @@ impl App {
                 Err(e) => self.log_lines.push(format!("Cancel failed: {e}")),
             }
             self.clamp_orders_idx();
-        }
-
-        if self.last_quote_refresh.elapsed() >= self.quote_refresh_interval {
-            self.last_quote_refresh = Instant::now();
-            self.refresh_pending = true;
-        }
-
-        if self.refresh_pending {
-            self.refresh_pending = false;
-            self.refresh_quotes().await;
-            match self.engine.process_pending_orders().await {
-                Ok(filled) => {
-                    for o in filled {
-                        terminal_bell();
-                        self.log_lines.push(format!(
-                            "*** FILLED *** {} {} {:.0} @ ${:.2}",
-                            format!("{:?}", o.side).to_uppercase(),
-                            o.symbol,
-                            o.filled_qty,
-                            o.avg_fill_price
-                        ));
-                    }
-                    self.clamp_orders_idx();
-                }
-                Err(e) => self.log_lines.push(format!("Process orders error: {e}")),
+            if self.should_quit {
+                return;
             }
-            self.update_equity().await;
         }
 
-        if self.chart_pending {
-            self.chart_pending = false;
-            self.load_chart().await;
+        if self.last_data_refresh.elapsed() >= DATA_REFRESH_INTERVAL {
+            self.last_data_refresh = Instant::now();
+            self.refresh_market_data(key_rx).await;
+            if self.should_quit {
+                return;
+            }
         }
 
         self.trim_log();
     }
 
-    async fn execute_order(&mut self, req: SubmitRequest) {
+    async fn refresh_market_data(&mut self, key_rx: &mut UnboundedReceiver<KeyCode>) {
+        self.refresh_quotes(key_rx).await;
+        if self.should_quit {
+            return;
+        }
+
+        if let Some(sym) = self.chart_symbol.clone() {
+            self.kline_store.refresh_latest(
+                &sym,
+                self.kline_type,
+                AdjustType::ForwardAdjust,
+                64,
+            );
+        }
+
+        match self.engine.process_pending_orders().await {
+            Ok(filled) => {
+                for o in filled {
+                    terminal_bell();
+                    let fees = market_rules::compute_trade_fees(
+                        &o.symbol,
+                        o.side,
+                        o.filled_qty,
+                        o.avg_fill_price,
+                        &self.engine.config().trading,
+                    );
+                    self.log_lines.push(format!(
+                        "*** FILLED *** {}",
+                        market_rules::format_fill_log(&o, fees)
+                    ));
+                }
+                self.clamp_orders_idx();
+            }
+            Err(e) => self.log_lines.push(format!("Process orders error: {e}")),
+        }
+        if self.should_quit {
+            return;
+        }
+
+        self.update_equity(key_rx).await;
+    }
+
+    fn quote_symbols(&self) -> Vec<String> {
+        let mut symbols = self.config.watchlist.symbols.clone();
+        for pos in self.engine.positions() {
+            if !symbols
+                .iter()
+                .any(|sym| sym.eq_ignore_ascii_case(&pos.symbol))
+            {
+                symbols.push(pos.symbol.clone());
+            }
+        }
+        if let Some(sym) = &self.chart_symbol
+            && !symbols.iter().any(|s| s.eq_ignore_ascii_case(sym))
+        {
+            symbols.push(sym.clone());
+        }
+        symbols
+    }
+
+    async fn execute_order(&mut self, req: SubmitRequest, key_rx: &mut UnboundedReceiver<KeyCode>) {
+        self.drain_keys(key_rx);
+        if self.should_quit {
+            return;
+        }
         let result = if let Some(limit) = req.limit {
             self.engine
                 .submit_limit_order(&req.symbol, req.side, req.qty, limit)
@@ -230,12 +373,16 @@ impl App {
             Ok(o) => {
                 if o.status == crate::engine::order::OrderStatus::Filled {
                     terminal_bell();
-                    self.log_lines.push(format!(
-                        "Filled {} {} {:.0} @ ${:.2}",
-                        format!("{:?}", o.side).to_uppercase(),
-                        o.symbol,
+                    let fees = market_rules::compute_trade_fees(
+                        &o.symbol,
+                        o.side,
                         o.filled_qty,
-                        o.avg_fill_price
+                        o.avg_fill_price,
+                        &self.engine.config().trading,
+                    );
+                    self.log_lines.push(format!(
+                        "Filled {}",
+                        market_rules::format_fill_log(&o, fees)
                     ));
                 } else {
                     self.log_lines.push(format!(
@@ -247,19 +394,28 @@ impl App {
                     ));
                     self.clamp_orders_idx();
                 }
-                self.update_equity().await;
+                self.update_equity(key_rx).await;
             }
             Err(e) => self.log_lines.push(format!("Order error: {e}")),
         }
     }
 
-    async fn refresh_quotes(&mut self) {
-        let symbols = self.config.watchlist.symbols.clone();
+    async fn refresh_quotes(&mut self, key_rx: &mut UnboundedReceiver<KeyCode>) {
+        let symbols = self.quote_symbols();
+        let provider = self.provider.clone();
+        let should_log = self.refresh_log;
+        self.refresh_log = false;
 
-        if let Ok(batch) = self.provider.quotes(&symbols).await {
+        if let Some(Ok(batch)) = self
+            .wait_or_quit(key_rx, provider.quotes(&symbols))
+            .await
+        {
             for q in batch {
                 self.merge_quote(q);
             }
+        }
+        if self.should_quit {
+            return;
         }
 
         let missing: Vec<String> = symbols
@@ -275,11 +431,22 @@ impl App {
 
         let mut failures = Vec::new();
         if !missing.is_empty() {
-            let report = fetch_quotes_report(self.provider.as_ref(), &missing).await;
-            for q in report.quotes {
-                self.merge_quote(q);
+            let provider = self.provider.clone();
+            if let Some(report) = self
+                .wait_or_quit(
+                    key_rx,
+                    async move { fetch_quotes_report(provider.as_ref(), &missing).await },
+                )
+                .await
+            {
+                for q in report.quotes {
+                    self.merge_quote(q);
+                }
+                failures = report.failures;
             }
-            failures = report.failures;
+        }
+        if self.should_quit {
+            return;
         }
 
         let fetched = symbols
@@ -292,47 +459,62 @@ impl App {
             .count();
 
         if fetched == 0 {
-            self.log_lines.push(format!(
-                "Quote error: yahoo and fcontext both failed (0/{})",
-                symbols.len()
-            ));
-            for f in &failures {
+            if should_log {
+                self.log_lines.push(format!(
+                    "Quote error: yahoo and fcontext both failed (0/{})",
+                    symbols.len()
+                ));
+                for f in &failures {
+                    self.log_lines
+                        .push(format!("  {}", format_quote_failure_log(f)));
+                }
                 self.log_lines
-                    .push(format!("  {}", format_quote_failure_log(f)));
+                    .push("  hint: paper config provider-status".into());
             }
-            self.log_lines
-                .push("  hint: paper config provider-status".into());
             return;
         }
 
-        self.log_lines.push(format!(
-            "Quotes {}/{} @ {}",
-            fetched,
-            symbols.len(),
-            chrono::Utc::now().format("%H:%M:%S")
-        ));
-
-        for f in &failures {
-            self.log_lines
-                .push(format!("Quote failed: {}", format_quote_failure_log(f)));
+        if should_log {
+            self.log_lines.push(format!(
+                "Quotes {}/{} @ {}",
+                fetched,
+                symbols.len(),
+                chrono::Utc::now().format("%H:%M:%S")
+            ));
+            for f in &failures {
+                self.log_lines
+                    .push(format!("Quote failed: {}", format_quote_failure_log(f)));
+            }
         }
     }
 
-    fn merge_quote(&mut self, q: Quote) {
+    fn merge_quote(&mut self, mut incoming: Quote) {
         if let Some(existing) = self
             .quotes
-            .iter_mut()
-            .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
+            .iter()
+            .find(|x| x.symbol.eq_ignore_ascii_case(&incoming.symbol))
         {
-            *existing = q;
+            incoming.merge_metadata_from(existing);
+            if let Some(slot) = self
+                .quotes
+                .iter_mut()
+                .find(|x| x.symbol.eq_ignore_ascii_case(&incoming.symbol))
+            {
+                *slot = incoming;
+            }
         } else {
-            self.quotes.push(q);
+            self.quotes.push(incoming);
         }
     }
 
-    async fn update_equity(&mut self) {
+    async fn update_equity(&mut self, key_rx: &mut UnboundedReceiver<KeyCode>) {
+        let positions = self.engine.positions().to_vec();
         let mut marks = Vec::new();
-        for pos in self.engine.positions() {
+        for pos in positions {
+            self.drain_keys(key_rx);
+            if self.should_quit {
+                return;
+            }
             let price = if let Some(q) = self
                 .quotes
                 .iter()
@@ -349,30 +531,27 @@ impl App {
         self.equity = self.engine.account.equity(&marks);
     }
 
-    async fn load_chart(&mut self) {
-        let Some(sym) = self.chart_symbol.clone() else {
+    fn display_orders(&self) -> Vec<crate::engine::order::Order> {
+        self.engine
+            .recent_orders(ORDER_DISPLAY_LIMIT)
+            .unwrap_or_default()
+    }
+
+    fn cancel_selected_order(&mut self) {
+        let orders = self.display_orders();
+        let Some(order) = orders.get(self.orders_idx) else {
             return;
         };
-        match self
-            .provider
-            .historical(&sym, HistoryRange::M3, HistoryInterval::D1)
-            .await
-        {
-            Ok(c) => {
-                self.chart_candles = c;
-                self.log_lines
-                    .push(format!("Chart {sym}: {} bars", self.chart_candles.len()));
-            }
-            Err(e) => {
-                self.chart_candles.clear();
-                self.log_lines
-                    .push(format!("Chart {sym} error (yahoo→fcontext): {e}"));
-            }
+        if order.is_pending() {
+            self.cancel_order_id = Some(order.id);
+        } else {
+            self.log_lines
+                .push("Only pending orders can be cancelled (x)".into());
         }
     }
 
     fn clamp_orders_idx(&mut self) {
-        let n = self.engine.pending_orders().len();
+        let n = self.display_orders().len();
         if n == 0 {
             self.orders_idx = 0;
         } else if self.orders_idx >= n {
@@ -388,8 +567,13 @@ impl App {
 
     pub fn render(&self, f: &mut Frame) {
         let area = f.area();
-        if area.width < 20 || area.height < 12 {
-            let msg = Paragraph::new("Terminal too small — resize window (min 80x24 recommended)");
+        let ui = UiLayout::from_area(area.width, area.height);
+        if area.width < ui.min_width() || area.height < ui.min_height() {
+            let msg = Paragraph::new(format!(
+                "Terminal too small — resize window (min {}x{} recommended)",
+                ui.min_width().max(80),
+                ui.min_height().max(24)
+            ));
             f.render_widget(msg, area);
             return;
         }
@@ -397,27 +581,27 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(ui.header_h),
                 Constraint::Min(10),
-                Constraint::Length(5),
-                Constraint::Length(3),
+                Constraint::Length(ui.log_h),
+                Constraint::Length(ui.footer_h),
             ])
             .split(f.area());
 
-        self.render_header(f, chunks[0]);
+        self.render_header(f, chunks[0], ui);
 
         let body = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(28),
-                Constraint::Percentage(44),
-                Constraint::Percentage(28),
+                Constraint::Length(ui.watchlist_w),
+                Constraint::Min(24),
+                Constraint::Length(ui.sidebar_w),
             ])
             .split(chunks[1]);
 
-        self.render_watchlist(f, body[0]);
-        self.render_chart(f, body[1]);
-        self.render_sidebar(f, body[2]);
+        self.render_watchlist(f, body[0], ui);
+        self.render_chart(f, body[1], ui);
+        self.render_sidebar(f, body[2], ui);
 
         let log_items: Vec<ListItem> = self
             .log_lines
@@ -434,16 +618,27 @@ impl App {
             })
             .collect();
         f.render_widget(
-            List::new(log_items).block(Block::default().borders(Borders::ALL).title("Log")),
+            List::new(log_items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(styles::border())
+                    .title("Log"),
+            ),
             chunks[2],
         );
 
+        let shortcuts = ui.shortcuts_hint();
         let order_text = if let Some(entry) = &self.order_entry {
             entry.label()
+        } else if self.reset_confirm {
+            format!(
+                "CONFIRM RESET — z again to restore ${:.0} & clear all | Esc cancel | {}",
+                self.engine.config().account.initial_cash, shortcuts
+            )
         } else {
-            "b: buy  s: sell selected symbol  |  in order: [m] market/limit  Tab field  Enter submit".into()
+            shortcuts.to_string()
         };
-        let order_style = if self.order_entry.is_some() {
+        let order_style = if self.order_entry.is_some() || self.reset_confirm {
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD)
@@ -453,12 +648,17 @@ impl App {
         f.render_widget(
             Paragraph::new(order_text)
                 .style(order_style)
-                .block(Block::default().borders(Borders::ALL).title("Order")),
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(styles::border())
+                        .title("Order"),
+                ),
             chunks[3],
         );
     }
 
-    fn render_header(&self, f: &mut Frame, area: Rect) {
+    fn render_header(&self, f: &mut Frame, area: Rect, _ui: UiLayout) {
         let sym = self.chart_symbol.as_deref().unwrap_or("—");
         let header = Paragraph::new(Line::from(vec![
             Span::styled(
@@ -479,109 +679,124 @@ impl App {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Paper Trading Terminal"),
+                .border_style(styles::border())
+                .title("Paper Trading Terminal")
+                .title_bottom(
+                    Line::from(vec![
+                        Span::styled(" z ", styles::dark_gray()),
+                        Span::raw("reset "),
+                        Span::styled(" r ", styles::dark_gray()),
+                        Span::raw("refresh "),
+                        Span::styled(" q ", styles::dark_gray()),
+                        Span::raw("quit"),
+                    ])
+                    .right_aligned(),
+                ),
         );
         f.render_widget(header, area);
     }
 
-    fn render_watchlist(&self, f: &mut Frame, area: Rect) {
-        let items: Vec<ListItem> = self
-            .config
-            .watchlist
-            .symbols
-            .iter()
-            .enumerate()
-            .map(|(i, sym)| {
-                let style = if i == self.watchlist_idx {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                };
-                let line = self
-                    .quotes
-                    .iter()
-                    .find(|q| q.symbol.eq_ignore_ascii_case(sym))
-                    .map(|q| format!("{:6} ${:>7.2} {:+.1}%", q.symbol, q.price, q.change_pct))
-                    .unwrap_or_else(|| format!("{sym:6}        —"));
-                ListItem::new(line).style(style)
-            })
-            .collect();
-        f.render_widget(
-            List::new(items).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Watchlist (j/k)"),
-            ),
+    fn render_watchlist(&self, f: &mut Frame, area: Rect, ui: UiLayout) {
+        watchlist::render(
+            f,
             area,
+            &self.config.watchlist.symbols,
+            &self.quotes,
+            self.watchlist_idx,
+            ui,
         );
     }
 
-    fn render_chart(&self, f: &mut Frame, area: Rect) {
-        let title = format!(
-            "{} daily (3m) — {} bars",
-            self.chart_symbol.as_deref().unwrap_or("—"),
-            self.chart_candles.len()
+    fn render_chart(&self, f: &mut Frame, area: Rect, ui: UiLayout) {
+        let y_axis_width = ui.chart_y_axis_w;
+
+        let sym = self.chart_symbol.as_deref().unwrap_or("—");
+        let chart_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(styles::border());
+        let inner = chart_block.inner(area);
+        f.render_widget(chart_block, area);
+
+        let chart_chunks = Layout::default()
+            .constraints([Constraint::Length(2), Constraint::Min(0)])
+            .direction(Direction::Vertical)
+            .split(inner);
+
+        let selected_type_index = KlineType::iter()
+            .position(|t| t == self.kline_type)
+            .unwrap_or(5);
+        let chart_tabs = Tabs::new(
+            KlineType::iter()
+                .map(|chart_type| {
+                    Line::from(vec![
+                        Span::raw(" "),
+                        Span::raw(chart_type.to_string()),
+                        Span::raw(" "),
+                    ])
+                })
+                .collect::<Vec<_>>(),
+        )
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+        .select(selected_type_index)
+        .padding("", "");
+        f.render_widget(chart_tabs, chart_chunks[0]);
+
+        let chart_area = chart_chunks[1];
+        let (page_size, page) = chart_area
+            .width
+            .checked_sub(y_axis_width)
+            .filter(|&w| w > 0)
+            .map(|w| (w as usize, self.kline_index))
+            .unwrap_or((1, 0));
+
+        let samples = self.kline_store.by_pagination(
+            sym,
+            self.kline_type,
+            AdjustType::ForwardAdjust,
+            page,
+            page_size,
         );
-        CandlestickChart::new(&self.chart_candles, title).render(f, area);
+
+        if samples.is_empty() {
+            let msg = if sym == "—" {
+                "Select a symbol"
+            } else {
+                "Loading..."
+            };
+            f.render_widget(
+                Paragraph::new(msg).alignment(Alignment::Center),
+                chart_area,
+            );
+            return;
+        }
+
+        let candles = klines_to_cli(&samples);
+        if candles.is_empty() {
+            f.render_widget(
+                Paragraph::new("Invalid kline data").alignment(Alignment::Center),
+                chart_area,
+            );
+            return;
+        }
+
+        render_kline_chart(f, chart_area, &candles);
     }
 
-    fn render_sidebar(&self, f: &mut Frame, area: Rect) {
+    fn render_sidebar(&self, f: &mut Frame, area: Rect, _ui: UiLayout) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([Constraint::Percentage(45), Constraint::Percentage(55)])
             .split(area);
 
-        let pos_items: Vec<ListItem> = if self.engine.positions().is_empty() {
-            vec![ListItem::new("No positions")]
-        } else {
-            self.engine
-                .positions()
-                .iter()
-                .map(|p| {
-                    ListItem::new(format!(
-                        "{:6} {:>5.0} @ ${:.2}",
-                        p.symbol, p.quantity, p.avg_cost
-                    ))
-                })
-                .collect()
-        };
-        f.render_widget(
-            List::new(pos_items).block(Block::default().borders(Borders::ALL).title("Positions")),
-            chunks[0],
-        );
+        positions::render(f, chunks[0], self.engine.positions(), &self.quotes);
 
-        let orders = self.engine.pending_orders();
-        let ord_items: Vec<ListItem> = if orders.is_empty() {
-            vec![ListItem::new("No pending orders")]
-        } else {
-            orders
-                .iter()
-                .enumerate()
-                .map(|(i, o)| {
-                    let style = if i == self.orders_idx {
-                        Style::default()
-                            .fg(Color::Magenta)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(format!(
-                        "{:4} {:6} {:.0} @ ${:.2}",
-                        format!("{:?}", o.side).to_uppercase(),
-                        o.symbol,
-                        o.qty,
-                        o.limit_price.unwrap_or(0.0)
-                    ))
-                    .style(style)
-                })
-                .collect()
-        };
-        f.render_widget(
-            List::new(ord_items)
-                .block(Block::default().borders(Borders::ALL).title("Orders (n/x)")),
+        let display_orders = self.display_orders();
+        orders::render(
+            f,
             chunks[1],
+            &display_orders,
+            self.orders_idx,
+            &self.engine.config().trading,
         );
     }
 }

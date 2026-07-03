@@ -53,7 +53,14 @@ pub struct AccountConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradingConfig {
+    /// Flat platform/broker fee per order (all markets).
     pub commission_per_trade: f64,
+    /// Variable commission in basis points of trade notional (1 bps = 0.01%).
+    #[serde(default)]
+    pub commission_bps: f64,
+    /// Minimum platform commission per order.
+    #[serde(default)]
+    pub min_commission: f64,
     pub slippage_bps: f64,
 }
 
@@ -82,6 +89,8 @@ impl Default for AppConfig {
             },
             trading: TradingConfig {
                 commission_per_trade: 0.0,
+                commission_bps: 0.0,
+                min_commission: 0.0,
                 slippage_bps: 5.0,
             },
             cache: CacheConfig {

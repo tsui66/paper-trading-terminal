@@ -64,8 +64,31 @@ pub struct Quote {
     pub change_pct: f64,
     pub volume: u64,
     pub timestamp: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+}
+
+impl Quote {
+    pub fn merge_metadata_from(&mut self, other: &Quote) {
+        if self
+            .name
+            .as_ref()
+            .is_none_or(|name| name.trim().is_empty())
+        {
+            self.name = other.name.clone();
+        }
+        if self
+            .status
+            .as_ref()
+            .is_none_or(|status| status.trim().is_empty())
+        {
+            self.status = other.status.clone();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

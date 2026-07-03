@@ -21,6 +21,18 @@ const BASE_PRICES: &[(&str, f64)] = &[
     ("QQQ", 485.60),
 ];
 
+const MOCK_NAMES: &[(&str, &str)] = &[
+    ("AAPL", "Apple Inc."),
+    ("MSFT", "Microsoft"),
+    ("NVDA", "NVIDIA"),
+    ("GOOGL", "Alphabet"),
+    ("AMZN", "Amazon"),
+    ("META", "Meta Platforms"),
+    ("TSLA", "Tesla"),
+    ("SPY", "SPDR S&P 500"),
+    ("QQQ", "Invesco QQQ"),
+];
+
 pub struct MockProvider;
 
 impl Default for MockProvider {
@@ -47,6 +59,17 @@ impl MockProvider {
             })
     }
 
+    fn mock_name(symbol: &str) -> Option<String> {
+        let code = symbol
+            .rsplit_once('.')
+            .map_or(symbol, |(code, _)| code)
+            .to_ascii_uppercase();
+        MOCK_NAMES
+            .iter()
+            .find(|(sym, _)| *sym == code)
+            .map(|(_, name)| (*name).to_string())
+    }
+
     fn jitter(symbol: &str, scale: f64) -> f64 {
         let mut h = DefaultHasher::new();
         Utc::now().timestamp().hash(&mut h);
@@ -62,12 +85,14 @@ impl MockProvider {
         let price = (base + change).max(0.01);
         let change_pct = (change / base) * 100.0;
         Quote {
-            symbol: sym,
+            symbol: sym.clone(),
             price,
             change,
             change_pct,
             volume: 1_000_000 + (price as u64 % 500_000),
             timestamp: Utc::now(),
+            name: Self::mock_name(&sym),
+            status: Some("Regular session".into()),
             source: Some("mock".into()),
         }
     }

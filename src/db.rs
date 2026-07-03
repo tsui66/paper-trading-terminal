@@ -42,6 +42,7 @@ impl Database {
                 account_id TEXT NOT NULL,
                 symbol TEXT NOT NULL,
                 quantity REAL NOT NULL,
+                locked_qty REAL NOT NULL DEFAULT 0,
                 avg_cost REAL NOT NULL,
                 PRIMARY KEY (account_id, symbol)
             );
@@ -63,6 +64,24 @@ impl Database {
             );
             "#,
         )?;
+        self.migrate_positions_locked_qty()?;
+        Ok(())
+    }
+
+    fn migrate_positions_locked_qty(&self) -> Result<()> {
+        let mut stmt = self
+            .conn
+            .prepare("PRAGMA table_info(positions)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        if !columns.iter().any(|c| c == "locked_qty") {
+            self.conn.execute(
+                "ALTER TABLE positions ADD COLUMN locked_qty REAL NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -97,12 +116,13 @@ impl Database {
     fn load_positions(&self, account_id: &Uuid) -> Result<Vec<Position>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT symbol, quantity, avg_cost FROM positions WHERE account_id = ?1")?;
+            .prepare("SELECT symbol, quantity, locked_qty, avg_cost FROM positions WHERE account_id = ?1")?;
         let rows = stmt.query_map(params![account_id.to_string()], |row| {
             Ok(Position {
                 symbol: row.get(0)?,
                 quantity: row.get(1)?,
-                avg_cost: row.get(2)?,
+                locked_qty: row.get(2)?,
+                avg_cost: row.get(3)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -133,11 +153,12 @@ impl Database {
 
         for pos in &account.positions {
             self.conn.execute(
-                "INSERT INTO positions (account_id, symbol, quantity, avg_cost) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO positions (account_id, symbol, quantity, locked_qty, avg_cost) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
                     account.id.to_string(),
                     pos.symbol,
                     pos.quantity,
+                    pos.locked_qty,
                     pos.avg_cost,
                 ],
             )?;
@@ -202,6 +223,69 @@ impl Database {
         )?;
         let rows = stmt.query_map([], map_order_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Reset cash to `initial_cash` and purge all positions and orders for the account.
+    pub fn reset_account(
+        &self,
+        account_id: &Uuid,
+        initial_cash: f64,
+        currency: &str,
+    ) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let id = account_id.to_string();
+        self.conn.execute(
+            "DELETE FROM orders WHERE account_id = ?1",
+            params![id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM positions WHERE account_id = ?1",
+            params![id],
+        )?;
+        self.conn.execute(
+            r#"
+            UPDATE accounts
+            SET cash = ?2, currency = ?3, updated_at = ?4
+            WHERE id = ?1
+            "#,
+            params![id, initial_cash, currency, now],
+        )?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use crate::engine::order::{OrderSide, OrderStatus};
+
+    #[test]
+    fn reset_account_clears_positions_and_orders() {
+        let config = AppConfig::default();
+        let db = Database::open(":memory:").unwrap();
+        let account = db.load_or_create_account(&config).unwrap();
+        let mut order = crate::engine::order::Order::new_market("AAPL", OrderSide::Buy, 10.0);
+        order.status = OrderStatus::Filled;
+        db.upsert_order(&account.id, &order).unwrap();
+        let mut acct = account.clone();
+        acct.positions.push(Position {
+            symbol: "AAPL".into(),
+            quantity: 10.0,
+            locked_qty: 0.0,
+            avg_cost: 100.0,
+        });
+        acct.cash = 50_000.0;
+        db.persist_account(&acct).unwrap();
+
+        db.reset_account(&account.id, config.account.initial_cash, &config.account.currency)
+            .unwrap();
+
+        let reloaded = db.load_or_create_account(&config).unwrap();
+        assert!((reloaded.cash - config.account.initial_cash).abs() < f64::EPSILON);
+        assert!(reloaded.positions.is_empty());
+        assert!(db.load_orders().unwrap().is_empty());
+        assert!(db.load_pending_orders(&account.id).unwrap().is_empty());
     }
 }
 

@@ -12,6 +12,20 @@ pub fn normalize_symbol(symbol: &str) -> String {
     symbol.trim().to_uppercase()
 }
 
+/// Market bucket for session rules: US / HK / CN / SG / OTHER.
+pub fn market_from_symbol(symbol: &str) -> String {
+    let upper = normalize_symbol(symbol);
+    if upper.ends_with(".HK") {
+        "HK".into()
+    } else if upper.ends_with(".SH") || upper.ends_with(".SZ") {
+        "CN".into()
+    } else if upper.ends_with(".SG") {
+        "SG".into()
+    } else {
+        "US".into()
+    }
+}
+
 pub fn to_fcontext_symbol(symbol: &str) -> String {
     let s = normalize_symbol(symbol);
     if s.ends_with(".US") {

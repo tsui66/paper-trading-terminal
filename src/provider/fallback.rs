@@ -276,6 +276,8 @@ mod tests {
             change_pct: 0.0,
             volume: 0,
             timestamp: Utc::now(),
+            name: None,
+            status: None,
             source: Some(source.into()),
         }
     }

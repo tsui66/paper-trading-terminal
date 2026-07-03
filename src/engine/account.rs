@@ -18,7 +18,16 @@ pub struct Account {
 pub struct Position {
     pub symbol: String,
     pub quantity: f64,
+    /// A-share T+1: shares bought today (not sellable until next session).
+    #[serde(default)]
+    pub locked_qty: f64,
     pub avg_cost: f64,
+}
+
+impl Position {
+    pub fn sellable_qty(&self) -> f64 {
+        (self.quantity - self.locked_qty).max(0.0)
+    }
 }
 
 impl Account {
@@ -75,7 +84,7 @@ impl Account {
                     );
                 }
                 self.cash -= notional;
-                self.upsert_position(&order.symbol, order.filled_qty, order.avg_fill_price);
+                self.upsert_position_buy(&order.symbol, order.filled_qty, order.avg_fill_price);
             }
             OrderSide::Sell => {
                 let pos = self
@@ -98,15 +107,21 @@ impl Account {
         Ok(())
     }
 
-    fn upsert_position(&mut self, symbol: &str, qty: f64, price: f64) {
-        if let Some(pos) = self.positions.iter_mut().find(|p| p.symbol == symbol) {
+    fn upsert_position_buy(&mut self, symbol: &str, qty: f64, price: f64) {
+        let sym = symbol.to_uppercase();
+        let t_plus_one = crate::engine::market_rules::Market::from_symbol(&sym).uses_t_plus_one();
+        if let Some(pos) = self.positions.iter_mut().find(|p| p.symbol == sym) {
             let total_cost = pos.avg_cost * pos.quantity + price * qty;
             pos.quantity += qty;
             pos.avg_cost = total_cost / pos.quantity;
+            if t_plus_one {
+                pos.locked_qty += qty;
+            }
         } else {
             self.positions.push(Position {
-                symbol: symbol.to_uppercase(),
+                symbol: sym,
                 quantity: qty,
+                locked_qty: if t_plus_one { qty } else { 0.0 },
                 avg_cost: price,
             });
         }
@@ -119,5 +134,48 @@ impl Account {
                 self.positions.remove(idx);
             }
         }
+    }
+
+    /// Clear same-day locks at the start of a new A-share trading day (T+1).
+    pub fn unlock_cn_settlement(&mut self) {
+        for pos in &mut self.positions {
+            if crate::engine::market_rules::Market::from_symbol(&pos.symbol).uses_t_plus_one() {
+                pos.locked_qty = 0.0;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::order::{Order, OrderSide};
+
+    fn filled_buy(symbol: &str, qty: f64, price: f64) -> Order {
+        let mut o = Order::new_market(symbol, OrderSide::Buy, qty);
+        o.status = crate::engine::order::OrderStatus::Filled;
+        o.filled_qty = qty;
+        o.avg_fill_price = price;
+        o
+    }
+
+    #[test]
+    fn cn_buy_locks_shares_until_unlock() {
+        let mut acct = Account::new(1_000_000.0, "CNY");
+        acct.apply_fill(&filled_buy("600519.SH", 100.0, 100.0)).unwrap();
+        let pos = acct.positions.first().unwrap();
+        assert_eq!(pos.quantity, 100.0);
+        assert_eq!(pos.locked_qty, 100.0);
+        assert_eq!(pos.sellable_qty(), 0.0);
+
+        acct.unlock_cn_settlement();
+        assert_eq!(acct.positions[0].sellable_qty(), 100.0);
+    }
+
+    #[test]
+    fn us_buy_is_immediately_sellable() {
+        let mut acct = Account::new(100_000.0, "USD");
+        acct.apply_fill(&filled_buy("AAPL", 10.0, 100.0)).unwrap();
+        assert_eq!(acct.positions[0].sellable_qty(), 10.0);
     }
 }
