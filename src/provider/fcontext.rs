@@ -48,6 +48,11 @@ impl FcontextProvider {
             change_pct,
             volume,
             timestamp,
+            prev_close: Some(prev_close),
+            open: parse_number(item.get("open")),
+            high: parse_number(item.get("high")),
+            low: parse_number(item.get("low")),
+            turnover: parse_number(item.get("turnover")),
             name: parse_string_field(
                 item,
                 &[

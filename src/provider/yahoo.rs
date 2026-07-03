@@ -5,7 +5,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use yfinance_rs::{Interval, PriceAmount, QuantityAmount, Range, Ticker, YfClient};
+use yfinance_rs::{FastInfo, Interval, PriceAmount, QuantityAmount, Range, Ticker, YfClient};
 
 const YAHOO_MAX_ATTEMPTS: u32 = 3;
 
@@ -148,9 +148,42 @@ impl YahooProvider {
             change_pct,
             volume,
             timestamp: ts,
+            prev_close: Some(prev),
+            open: None,
+            high: None,
+            low: None,
+            turnover: None,
             name: q.name.clone(),
             status,
             source: Some("yahoo".into()),
+        }
+    }
+
+    fn apply_fast_info(quote: &mut Quote, info: &FastInfo) {
+        let snap = &info.snapshot;
+        if let Some(v) = snap.previous_close.as_ref() {
+            quote.prev_close = Some(Self::price_to_f64(v));
+        }
+        if let Some(v) = snap.open.as_ref() {
+            quote.open = Some(Self::price_to_f64(v));
+        }
+        if let Some(v) = snap.day_high.as_ref() {
+            quote.high = Some(Self::price_to_f64(v));
+        }
+        if let Some(v) = snap.day_low.as_ref() {
+            quote.low = Some(Self::price_to_f64(v));
+        }
+        if let Some(v) = snap.volume.as_ref() {
+            quote.volume = Self::quantity_to_u64(v);
+        }
+        if quote.name.as_ref().is_none_or(|n| n.trim().is_empty()) {
+            quote.name = snap.name.clone();
+        }
+        if quote.status.as_ref().is_none_or(|s| s.trim().is_empty()) {
+            quote.status = snap
+                .market_state
+                .as_ref()
+                .map(|state| state.full_name().to_string());
         }
     }
 }
@@ -180,7 +213,13 @@ impl MarketDataProvider for YahooProvider {
             .next()
             .ok_or_else(|| ProviderError::NotFound(sym.clone()))?;
 
-        let quote = Self::map_quote(&sym, raw);
+        let mut quote = Self::map_quote(&sym, raw);
+        if let Ok(info) = Ticker::new(&self.client.lock().await.clone(), &sym)
+            .fast_info()
+            .await
+        {
+            Self::apply_fast_info(&mut quote, &info);
+        }
         if let Some(cache) = &self.cache {
             cache.put(quote.clone());
         }

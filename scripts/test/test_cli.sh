@@ -36,6 +36,12 @@ assert_contains '"symbol": "AAPL"' "$OUT" "quote.AAPL"
 assert_contains '"symbol": "MSFT"' "$OUT" "quote.MSFT"
 echo "$OUT" | head -8
 
+echo "== quote table =="
+OUT=$($PAPER --db "$DB" quote AAPL)
+assert_contains '| Symbol' "$OUT" "quote.table.header"
+assert_contains '| AAPL.US' "$OUT" "quote.table.symbol"
+assert_contains '| Last' "$OUT" "quote.table.last"
+
 echo "== buy market =="
 OUT=$($PAPER --db "$DB" buy AAPL --qty 10 --json)
 assert_contains '"status": "filled"' "$OUT" "buy.filled"

@@ -1,4 +1,5 @@
 mod commands;
+mod output;
 
 use crate::config::AppConfig;
 use crate::db::Database;

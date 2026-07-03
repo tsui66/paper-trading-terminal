@@ -65,6 +65,16 @@ pub struct Quote {
     pub volume: u64,
     pub timestamp: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prev_close: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub high: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub low: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turnover: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
@@ -73,6 +83,21 @@ pub struct Quote {
 }
 
 impl Quote {
+    pub fn resolved_prev_close(&self) -> f64 {
+        self.prev_close
+            .unwrap_or_else(|| (self.price - self.change).max(0.0))
+    }
+
+    pub fn resolved_turnover(&self) -> Option<f64> {
+        self.turnover.or({
+            if self.volume > 0 && self.price > 0.0 {
+                Some(self.price * self.volume as f64)
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn merge_metadata_from(&mut self, other: &Quote) {
         if self.name.as_ref().is_none_or(|name| name.trim().is_empty()) {
             self.name = other.name.clone();

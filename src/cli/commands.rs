@@ -303,13 +303,7 @@ async fn cmd_quote(cli: &Cli, engine: &TradingEngine, symbols: &[String]) -> Res
             "failures": report.failures,
         }))?;
     } else {
-        for q in &report.quotes {
-            let src = q.source.as_deref().unwrap_or("?");
-            println!(
-                "{:6} ${:>8.2} {:+.2} ({:+.2}%) vol {} [{}]",
-                q.symbol, q.price, q.change, q.change_pct, q.volume, src
-            );
-        }
+        crate::cli::output::print_quote_table(&report.quotes);
         for f in &report.failures {
             eprintln!("quote failed: {}", f.error);
         }
