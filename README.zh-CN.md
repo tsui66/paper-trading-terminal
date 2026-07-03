@@ -2,14 +2,14 @@
 
 <p align="center"><strong>面向 AI 的美股模拟盘 CLI</strong> — 实时行情、持仓组合与交易。</p>
 
-<p align="center"><strong>语言：</strong> <a href="README.md">English</a> · 简体中文 · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
+<p align="center"> <a href="README.md">English</a> · 简体中文 · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
 ## 功能
 
 - **模拟账户** — 现金、持仓、按市值盈亏，持久化于 SQLite；TUI 中 `z` 可重置为 `initial_cash` 并清空持仓与订单
 - **订单** — 市价/限价买卖、撤单，触及限价自动成交；TUI 挂单展示成交价与费用
 - **贴近真实的模拟** — 按交易时段执行（盘中/盘前盘后/休市）、整手规则、A 股涨跌停与 T+1 卖出锁定、各市场监管费 + 可配置券商佣金
-- **行情** — 优先 Yahoo，失败时回退 fcontext CLI；两者均不可用时会明确报错
+- **行情** — 优先 Yahoo，失败时回退 Financial Context CLI；两者均不可用时会明确报错
 - **TUI** — 自适应布局（小终端自动缩面板与字号）、自选股、Braille K 线整页翻动、内置下单、成交提醒
 - **AI 原生** — 结构化 JSON 输出、`paper schema` 工具发现、`AgentSkill` Rust 嵌入
 - **Rust 库** — 通过 `AgentSkill` 与 `TradingEngine` 嵌入应用
@@ -17,7 +17,7 @@
 ## 环境要求
 
 - **paper** 二进制在 `PATH` 中（见下方 [安装与运行](#安装与运行)）
-- **fcontext** CLI — *可选*；Yahoo 不可用时作为备用数据源
+- **Financial Context** CLI — *可选*；Yahoo 不可用时作为备用数据源
 
 从源码构建另需 Rust stable ≥ 1.91（默认启用 Yahoo）。
 
@@ -43,7 +43,7 @@
 汇报安装路径与验证输出。除非 Yahoo 失败，否则 fcontext 为可选。
 ```
 
-更多提示词（分代理、fcontext 备用、JSON 工具接入）：[docs/agent-install.md](docs/agent-install.md)。
+更多提示词（分代理、Financial Context CLI 备用、JSON 工具接入）：[docs/agent-install.md](docs/agent-install.md)。
 
 </details>
 
@@ -160,7 +160,7 @@ paper cancel <order-id-prefix>
 paper portfolio --json
 ```
 
-### 步骤 4 —（可选）安装 fcontext 备用源
+### 步骤 4 —（可选）安装 Financial Context CLI 备用源
 
 若 Yahoo 已正常可跳过。建议在以下情况安装：
 
@@ -233,7 +233,7 @@ paper quote AAPL
 
 `paper` 接受 `AAPL`；fcontext 内部使用 `AAPL.US`。
 
-更多：[fcontext CLI 文档](https://docs.fcontext.com)。
+更多：[Financial Context CLI 文档](https://docs.fcontext.com)。
 
 ## 速查
 
@@ -264,7 +264,7 @@ timeout_secs = 30
 | 优先级 | 提供商 | 说明 |
 |--------|--------|------|
 | 1 | **yahoo** | 默认；免费 Yahoo Finance（可能不稳定） |
-| 2 | **fcontext** | 备用 CLI；需安装并 `fcontext auth login` |
+| 2 | **fcontext** | Financial Context CLI 备用；需安装并 `fcontext auth login` |
 
 ```
 yahoo ──失败──► fcontext ──失败──► 报错（中止操作）
@@ -383,7 +383,7 @@ ttl_secs = 60
 symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 ```
 
-可选环境变量见 `.env.example` 与 `RUST_LOG`。fcontext 认证由 fcontext CLI 管理，非 `paper`。
+可选环境变量见 `.env.example` 与 `RUST_LOG`。Financial Context 认证由 Financial Context CLI 管理，非 `paper`。
 
 账户重置仅在 TUI（`z` 双确认）— 尚无 CLI `reset` 命令。
 

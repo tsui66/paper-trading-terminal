@@ -2,14 +2,14 @@
 
 <p align="center"><strong>AI ネイティブの米国株ペーパートレード CLI</strong> — リアルタイム相場、ポートフォリオ、取引。</p>
 
-<p align="center"><strong>言語：</strong> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · 日本語 · <a href="README.ko.md">한국어</a></p>
+<p align="center"> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · 日本語 · <a href="README.ko.md">한국어</a></p>
 
 ## 機能
 
 - **ペーパー口座** — 現金・ポジション・時価評価損益を SQLite に永続化；TUI の `z` で `initial_cash` にリセットしポジション・注文をクリア
 - **注文** — 成行/指値の売買、キャンセル、指値到達で自動約定；TUI で約定価格と手数料を表示
 - **リアルに近いシミュレーション** — セッション対応（通常/プレ/アフター/休場）、ロットサイズ、A 株の値幅制限と T+1 売却ロック、市場別規制料金 + 設定可能なブローカー手数料
-- **マーケットデータ** — Yahoo 優先、fcontext CLI フォールバック；両方ダウン時は明確にエラー
+- **マーケットデータ** — Yahoo 優先、Financial Context CLI フォールバック；両方ダウン時は明確にエラー
 - **TUI** — 端末サイズに応じたレイアウト、ウォッチリスト、Braille ローソク足のページ送り、アプリ内発注、約定通知
 - **AI ネイティブ** — 構造化 JSON I/O、`paper schema` によるツール発見、Rust 埋め込み用 `AgentSkill`
 - **Rust ライブラリ** — `AgentSkill` と `TradingEngine` で埋め込み可能
@@ -17,7 +17,7 @@
 ## 要件
 
 - **paper** バイナリが `PATH` にあること（下記 [インストールと実行](#インストールと実行)）
-- **fcontext** CLI — *任意*；Yahoo 不可時のフォールバック
+- **Financial Context** CLI — *任意*；Yahoo 不可時のフォールバック
 
 ソースからビルドする場合は Rust stable ≥ 1.91（Yahoo はデフォルト有効）。
 
@@ -160,7 +160,7 @@ paper cancel <order-id-prefix>
 paper portfolio --json
 ```
 
-### ステップ 4 —（任意）fcontext フォールバック
+### ステップ 4 —（任意）Financial Context CLI フォールバック
 
 Yahoo が問題なければスキップ可。以下の場合にインストール：
 
@@ -233,7 +233,7 @@ paper quote AAPL
 
 `paper` は `AAPL` を受け付け；fcontext 内部は `AAPL.US`。
 
-詳細：[fcontext CLI ドキュメント](https://docs.fcontext.com)。
+詳細：[Financial Context CLI ドキュメント](https://docs.fcontext.com)。
 
 ## クイックリファレンス
 
@@ -264,7 +264,7 @@ timeout_secs = 30
 | 優先 | プロバイダ | 備考 |
 |------|------------|------|
 | 1 | **yahoo** | デフォルト；無料 Yahoo Finance（不安定な場合あり） |
-| 2 | **fcontext** | フォールバック CLI；インストール + `fcontext auth login` |
+| 2 | **fcontext** | Financial Context CLI フォールバック；インストール + `fcontext auth login` |
 
 ```
 yahoo ──失敗──► fcontext ──失敗──► エラー（操作中止）
@@ -383,7 +383,7 @@ ttl_secs = 60
 symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 ```
 
-`.env.example` で環境変数と `RUST_LOG`。fcontext 認証は fcontext CLI が管理（`paper` ではない）。
+`.env.example` で環境変数と `RUST_LOG`。Financial Context 認証は Financial Context CLI が管理（`paper` ではない）。
 
 口座リセットは TUI のみ（`z` 二重確認）— CLI `reset` コマンドは未実装。
 

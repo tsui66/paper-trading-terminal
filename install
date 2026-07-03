@@ -124,7 +124,7 @@ echo "  paper config provider-status  # check yahoo (primary) + fcontext (option
 echo "  paper quote AAPL              # test live quote"
 echo "  paper tui                     # launch dashboard"
 echo ""
-echo "Optional — fcontext fallback when Yahoo is down:"
+echo "Optional — Financial Context CLI fallback when Yahoo is down:"
 echo "  curl -sSL https://github.com/aitaport/fcontext-cli/releases/latest/download/install.sh | sh"
 echo "  fcontext auth login"
 echo "  paper config provider-status"

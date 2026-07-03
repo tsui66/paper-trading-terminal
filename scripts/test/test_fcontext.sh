@@ -7,7 +7,7 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/binary.sh"
 
 if ! command -v fcontext >/dev/null 2>&1; then
-  echo "SKIP: fcontext CLI not installed"
+  echo "SKIP: Financial Context CLI not installed"
   exit 0
 fi
 

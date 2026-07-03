@@ -2,14 +2,14 @@
 
 <p align="center"><strong>AI 네이티브 미국 주식 페이퍼 트레이딩 CLI</strong> — 실시간 시세, 포트폴리오, 거래.</p>
 
-<p align="center"><strong>언어:</strong> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · 한국어</p>
+<p align="center"> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · 한국어</p>
 
 ## 기능
 
 - **페이퍼 계좌** — 현금, 포지션, 시가 평가 손익을 SQLite에 저장; TUI에서 `z`로 `initial_cash` 복원 및 포지션·주문 초기화
 - **주문** — 시장가/지정가 매매, 취소, 지정가 도달 시 자동 체결; TUI에서 체결가와 수수료 표시
 - **현실에 가까운 시뮬레이션** — 세션 인식(정규/프리·애프터/휴장), 로트 크기, A주 가격 밴드 및 T+1 매도 잠금, 시장별 규제 수수료 + 설정 가능한 브로커 커미션
-- **시세** — Yahoo 우선, 실패 시 fcontext CLI 폴백; 둘 다 불가 시 명확한 오류
+- **시세** — Yahoo 우선, 실패 시 Financial Context CLI 폴백; 둘 다 불가 시 명확한 오류
 - **TUI** — 터미널 크기에 맞는 레이아웃, 관심종목, Braille 캔들 차트 페이지 넘김, 앱 내 주문, 체결 알림
 - **AI 네이티브** — 구조화 JSON I/O, `paper schema` 도구 탐색, Rust 임베딩용 `AgentSkill`
 - **Rust 라이브러리** — `AgentSkill`과 `TradingEngine`으로 임베딩
@@ -17,7 +17,7 @@
 ## 요구 사항
 
 - **paper** 바이너리가 `PATH`에 있어야 함（아래 [설치 및 실행](#설치-및-실행) 참고）
-- **fcontext** CLI — *선택*; Yahoo 불가 시 폴백
+- **Financial Context** CLI — *선택*; Yahoo 불가 시 폴백
 
 소스 빌드 시 Rust stable ≥ 1.91 필요（Yahoo 기본 활성화）.
 
@@ -160,7 +160,7 @@ paper cancel <order-id-prefix>
 paper portfolio --json
 ```
 
-### 4단계 —（선택）fcontext 폴백
+### 4단계 —（선택）Financial Context CLI 폴백
 
 Yahoo가 정상이면 생략 가능. 다음 경우 설치：
 
@@ -233,7 +233,7 @@ paper quote AAPL
 
 `paper`는 `AAPL` 수용; fcontext 내부는 `AAPL.US`.
 
-자세히：[fcontext CLI 문서](https://docs.fcontext.com).
+자세히：[Financial Context CLI 문서](https://docs.fcontext.com).
 
 ## 빠른 참조
 
@@ -264,7 +264,7 @@ timeout_secs = 30
 | 우선순위 | 제공자 | 비고 |
 |----------|--------|------|
 | 1 | **yahoo** | 기본; 무료 Yahoo Finance（불안정할 수 있음） |
-| 2 | **fcontext** | 폴백 CLI; 설치 + `fcontext auth login` |
+| 2 | **fcontext** | Financial Context CLI 폴백; 설치 + `fcontext auth login` |
 
 ```
 yahoo ──실패──► fcontext ──실패──► 오류（작업 중단）
@@ -383,7 +383,7 @@ ttl_secs = 60
 symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 ```
 
-`.env.example`에서 환경 변수와 `RUST_LOG`. fcontext 인증은 fcontext CLI가 관리（`paper` 아님）.
+`.env.example`에서 환경 변수와 `RUST_LOG`. Financial Context 인증은 Financial Context CLI가 관리（`paper` 아님）.
 
 계좌 초기화는 TUI만（`z` 이중 확인）— CLI `reset` 명령은 아직 없음.
 

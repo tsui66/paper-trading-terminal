@@ -2,14 +2,14 @@
 
 <p align="center"><strong>AI-native CLI for US stock paper trading</strong> — with real-time market data, portfolio, and trading.</p>
 
-<p align="center"><strong>Languages:</strong> English · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
+<p align="center"> English · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
 ## Features
 
 - **Paper account** — cash, positions, mark-to-market PnL, persisted in SQLite; TUI reset (`z`) restores `initial_cash` and clears positions/orders
 - **Orders** — market and limit buy/sell, cancel, auto-fill when price crosses limit; pending orders show fill price and fees in the TUI
 - **Realistic simulation** — session-aware execution (regular / pre / after-hours / closed), lot sizes, A-share price bands & T+1 sell lock, per-market regulatory fees + configurable broker commission
-- **Market data** — Yahoo first, fcontext CLI fallback; fails loudly if both are down
+- **Market data** — Yahoo first, Financial Context CLI fallback; fails loudly if both are down
 - **TUI** — adaptive layout (resizes panels & compact text on smaller terminals), watchlist, Braille candlestick chart with page scroll, in-app order entry, fill notifications
 - **AI-native** — structured JSON I/O, `paper schema` for tool discovery, `AgentSkill` for Rust embeds
 - **Rust library** — embed via `AgentSkill` and `TradingEngine`
@@ -17,7 +17,7 @@
 ## Requirements
 
 - **paper** binary on `PATH` (see [Install & run](#install--run) below)
-- **fcontext** CLI — *optional*; used as fallback when Yahoo is unavailable
+- **Financial Context** CLI — *optional*; used as fallback when Yahoo is unavailable
 
 Build from source additionally needs Rust stable ≥ 1.91 (Yahoo enabled by default).
 
@@ -43,7 +43,7 @@ Retry with Homebrew / Scoop / cargo build --release if the script fails.
 Report install path and verification output. fcontext is optional unless Yahoo fails.
 ```
 
-More prompts (per-agent wording, fcontext fallback, JSON tool wiring): [docs/agent-install.md](docs/agent-install.md).
+More prompts (per-agent wording, Financial Context CLI fallback, JSON tool wiring): [docs/agent-install.md](docs/agent-install.md).
 
 </details>
 
@@ -163,7 +163,7 @@ paper cancel <order-id-prefix>
 paper portfolio --json
 ```
 
-### Step 4 — (Optional) Install fcontext fallback
+### Step 4 — (Optional) Install Financial Context CLI fallback
 
 Skip this if Yahoo quotes already work. Install fcontext when:
 
@@ -236,7 +236,7 @@ Expected: `fcontext` shows **ok** in provider-status; quotes may show `[yahoo]` 
 
 `paper` accepts `AAPL`; fcontext uses `AAPL.US` internally.
 
-More: [fcontext CLI docs](https://docs.fcontext.com).
+More: [Financial Context CLI docs](https://docs.fcontext.com).
 
 ## Quick reference
 
@@ -267,7 +267,7 @@ timeout_secs = 30
 | Priority | Provider | Notes |
 |----------|----------|-------|
 | 1 | **yahoo** | Default; free Yahoo Finance data (can be unstable) |
-| 2 | **fcontext** | Fallback CLI; install + `fcontext auth login` (see [fcontext CLI](#fcontext-cli)) |
+| 2 | **fcontext** | Financial Context CLI fallback; install + `fcontext auth login` (see [Financial Context CLI](#step-4--optional-install-financial-context-cli-fallback)) |
 
 ```
 yahoo ──fail──► fcontext ──fail──► error (operation aborted)
@@ -386,7 +386,7 @@ ttl_secs = 60
 symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 ```
 
-Copy `.env.example` for optional env overrides and `RUST_LOG`. fcontext auth is managed by the `fcontext` CLI, not `paper`.
+Copy `.env.example` for optional env overrides and `RUST_LOG`. Financial Context auth is managed by the Financial Context CLI (`fcontext`), not `paper`.
 
 Account reset is available in the TUI (`z`, double-confirm) only — there is no CLI `reset` command yet.
 
@@ -425,7 +425,7 @@ let _schema = agent_schema();
 ```bash
 make test          # cargo test + CLI integration
 make lint          # fmt + clippy
-./scripts/test/test_fcontext.sh   # skips if fcontext CLI missing
+./scripts/test/test_fcontext.sh   # skips if Financial Context CLI missing
 ```
 
 Release packaging (local):

@@ -118,7 +118,7 @@ After install:
 - paper account
 - (optional) paper tui — only if interactive TUI is requested
 
-If Yahoo is down, optionally install fcontext CLI (see README Step 4) and re-run provider-status.
+If Yahoo is down, optionally install Financial Context CLI (see README Step 4) and re-run provider-status.
 
 For ongoing automation, register tools from `paper schema --json`. Example calls:
   paper portfolio --json
@@ -130,12 +130,12 @@ Confirm success only when quote and account commands work.
 
 ---
 
-## Optional — fcontext fallback
+## Optional — Financial Context CLI fallback
 
 Use when `paper config provider-status` shows Yahoo failing or the user wants a backup data source.
 
 ```text
-Install optional fcontext CLI fallback for paper-trading-terminal.
+Install optional Financial Context CLI fallback for paper-trading-terminal.
 
 paper already installed. Yahoo is primary; fcontext is fallback #2.
 

@@ -83,7 +83,7 @@ Write-Host "  paper config provider-status  # check yahoo (primary) + fcontext (
 Write-Host "  paper quote AAPL              # test live quote"
 Write-Host "  paper tui                     # launch dashboard"
 Write-Host ""
-Write-Host "Optional — fcontext fallback when Yahoo is down:"
+Write-Host "Optional — Financial Context CLI fallback when Yahoo is down:"
 Write-Host "  iwr https://github.com/aitaport/fcontext-cli/releases/latest/download/install.ps1 | iex"
 Write-Host "  fcontext auth login"
 Write-Host "  paper config provider-status"
