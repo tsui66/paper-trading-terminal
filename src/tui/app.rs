@@ -378,10 +378,12 @@ impl App {
 
     fn render_watchlist(&self, f: &mut Frame, area: Rect) {
         let items: Vec<ListItem> = self
-            .quotes
+            .config
+            .watchlist
+            .symbols
             .iter()
             .enumerate()
-            .map(|(i, q)| {
+            .map(|(i, sym)| {
                 let style = if i == self.watchlist_idx {
                     Style::default()
                         .fg(Color::Yellow)
@@ -389,11 +391,13 @@ impl App {
                 } else {
                     Style::default()
                 };
-                ListItem::new(format!(
-                    "{:6} ${:>7.2} {:+.1}%",
-                    q.symbol, q.price, q.change_pct
-                ))
-                .style(style)
+                let line = self
+                    .quotes
+                    .iter()
+                    .find(|q| q.symbol.eq_ignore_ascii_case(sym))
+                    .map(|q| format!("{:6} ${:>7.2} {:+.1}%", q.symbol, q.price, q.change_pct))
+                    .unwrap_or_else(|| format!("{sym:6}        —"));
+                ListItem::new(line).style(style)
             })
             .collect();
         f.render_widget(

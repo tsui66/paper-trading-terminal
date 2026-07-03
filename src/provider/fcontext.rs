@@ -120,6 +120,50 @@ impl FcontextProvider {
             HistoryInterval::Mo1 => "month",
         }
     }
+
+    async fn quotes_batch(&self, symbols: &[String]) -> Result<Vec<Quote>, ProviderError> {
+        let fc_symbols: Vec<String> = symbols.iter().map(|s| Self::fc_symbol(s)).collect();
+        let mut args = vec!["quote"];
+        for s in &fc_symbols {
+            args.push(s.as_str());
+        }
+        args.push("--format");
+        args.push("json");
+
+        let json = self.runner.run_json(&args).await?;
+        let quotes = Self::parse_quotes_json(&json)?;
+        if let Some(cache) = &self.cache {
+            for q in &quotes {
+                cache.put(q.clone());
+            }
+        }
+        Ok(quotes)
+    }
+
+    async fn quotes_sequential(&self, symbols: &[String]) -> Result<Vec<Quote>, ProviderError> {
+        let mut out = Vec::with_capacity(symbols.len());
+        let mut last_err = None;
+        for sym in symbols {
+            match self.quote(sym).await {
+                Ok(q) => out.push(q),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        if out.is_empty() {
+            return Err(last_err.unwrap_or_else(|| {
+                ProviderError::Unavailable("fcontext returned no quotes".into())
+            }));
+        }
+        Ok(out)
+    }
+}
+
+fn batch_quote_requires_subscription(err: &ProviderError) -> bool {
+    matches!(
+        err,
+        ProviderError::Unavailable(msg)
+            if msg.contains("402") || msg.to_ascii_lowercase().contains("subscription")
+    )
 }
 
 #[async_trait]
@@ -156,24 +200,17 @@ impl MarketDataProvider for FcontextProvider {
         if symbols.is_empty() {
             return Ok(vec![]);
         }
-
-        let fc_symbols: Vec<String> = symbols.iter().map(|s| Self::fc_symbol(s)).collect();
-        let mut args = vec!["quote"];
-        for s in &fc_symbols {
-            args.push(s.as_str());
+        if symbols.len() == 1 {
+            return Ok(vec![self.quote(&symbols[0]).await?]);
         }
-        args.push("--format");
-        args.push("json");
 
-        let json = self.runner.run_json(&args).await?;
-        let quotes = Self::parse_quotes_json(&json)?;
-
-        if let Some(cache) = &self.cache {
-            for q in &quotes {
-                cache.put(q.clone());
+        match self.quotes_batch(symbols).await {
+            Ok(quotes) => Ok(quotes),
+            Err(e) if batch_quote_requires_subscription(&e) => {
+                self.quotes_sequential(symbols).await
             }
+            Err(e) => Err(e),
         }
-        Ok(quotes)
     }
 
     async fn historical(
