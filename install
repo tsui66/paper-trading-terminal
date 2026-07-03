@@ -1,0 +1,90 @@
+#!/usr/bin/env sh
+# paper-trading-terminal installer (macOS / Linux)
+# Usage: curl -sSL https://github.com/<owner>/paper-trading-terminal/raw/main/install | sh
+
+set -eu
+
+type curl >/dev/null 2>&1 || { echo "curl: not found"; exit 1; }
+
+repo="${PAPER_INSTALL_REPO:-tsui66/paper-trading-terminal}"
+bin_name='paper'
+package_name='paper-trading-terminal'
+
+get_latest_release() {
+  url=$(curl --silent -o /dev/null -w "%{url_effective}" -L "https://github.com/$repo/releases/latest")
+  tag=$(echo "$url" | sed -E 's|.*/tag/||')
+  if [ -z "$tag" ] || [ "$tag" = "$url" ]; then
+    echo "Failed to fetch the latest release. Redirect URL: $url" >&2
+    return 1
+  fi
+  echo "$tag"
+}
+
+version="${PAPER_INSTALL_VERSION:-}"
+if [ -z "$version" ]; then
+  version=$(get_latest_release) || exit 1
+fi
+
+echo "Installing $package_name@$version"
+
+platform="$(uname | tr '[:upper:]' '[:lower:]')"
+arch="$(uname -m)"
+
+case "$arch" in
+  x86_64) arch="amd64" ;;
+  aarch64 | arm64) arch="arm64" ;;
+esac
+
+# Prefer musl on Linux when published (static, portable across glibc versions).
+libc=''
+if [ "$platform" = "linux" ] && [ -z "${PAPER_INSTALL_GNU:-}" ]; then
+  libc='-musl'
+fi
+
+artifact="$package_name-$platform$libc-$arch.tar.gz"
+download_url="https://github.com/$repo/releases/download/$version/$artifact"
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+
+if [ -n "${PAPER_INSTALL_FROM:-}" ]; then
+  echo "Using local package: $PAPER_INSTALL_FROM"
+  cp "$PAPER_INSTALL_FROM" "$tmp_dir/$bin_name.tar.gz"
+else
+  echo "Downloading $download_url"
+  if ! curl -fsSL -o "$tmp_dir/$bin_name.tar.gz" "$download_url"; then
+    if [ "$platform" = "linux" ] && [ -n "$libc" ]; then
+      echo "musl build not found, retrying gnu build..."
+      artifact="$package_name-$platform-$arch.tar.gz"
+      download_url="https://github.com/$repo/releases/download/$version/$artifact"
+      echo "Downloading $download_url"
+      curl -fsSL -o "$tmp_dir/$bin_name.tar.gz" "$download_url"
+    else
+      exit 1
+    fi
+  fi
+fi
+
+tar zxf "$tmp_dir/$bin_name.tar.gz" -C "$tmp_dir"
+
+install_bin() {
+  dest_dir=$1
+  mkdir -p "$dest_dir"
+  mv "$tmp_dir/$bin_name" "$dest_dir/$bin_name"
+  chmod +x "$dest_dir/$bin_name"
+}
+
+if [ "$(id -u)" -eq 0 ]; then
+  install_bin /usr/local/bin
+  dest=/usr/local/bin/$bin_name
+else
+  sudo mkdir -p /usr/local/bin
+  sudo mv "$tmp_dir/$bin_name" /usr/local/bin/$bin_name
+  sudo chmod +x /usr/local/bin/$bin_name
+  dest=/usr/local/bin/$bin_name
+fi
+
+echo ""
+echo "paper CLI $version installed to $dest"
+echo "Run \`paper -h\` for help, \`paper tui\` for the dashboard."
+echo ""

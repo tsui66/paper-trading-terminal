@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: paper-trading-terminal-darwin-arm64.tar.gz
+            ext: tar
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: paper-trading-terminal-linux-amd64.tar.gz
+            ext: tar
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: paper-trading-terminal-windows-amd64.zip
+            ext: zip
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package tarball
+        if: matrix.ext == 'tar'
+        run: |
+          bin=target/${{ matrix.target }}/release/paper
+          "$bin" --version
+          tar czvf "${{ matrix.artifact }}" -C target/${{ matrix.target }}/release paper
+
+      - name: Package zip
+        if: matrix.ext == 'zip'
+        shell: pwsh
+        run: |
+          & target/${{ matrix.target }}/release/paper.exe --version
+          Compress-Archive -Path target/${{ matrix.target }}/release/paper.exe -DestinationPath ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: SHA256 checksums
+        run: |
+          ls -lh dist/
+          for f in dist/*; do
+            [[ -f "$f" ]] || continue
+            openssl dgst -sha256 -r "$f" | awk '{print $1}' > "${f}.sha256"
+          done
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/**/*

@@ -1,0 +1,49 @@
+[package]
+name = "paper-trading-terminal"
+version = "0.1.0"
+edition = "2024"
+description = "AI-native CLI for local US stock paper trading with real-time market data, portfolio, and trading"
+license = "MIT"
+repository = "https://github.com/tsui66/paper-trading-terminal"
+keywords = ["trading", "paper-trading", "finance", "tui", "cli"]
+categories = ["finance", "command-line-utilities"]
+
+[[bin]]
+name = "paper"
+path = "src/main.rs"
+
+[lib]
+name = "paper_trading_terminal"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Requires Rust >= 1.91 (yfinance-rs / paft-market)
+yahoo = ["dep:yfinance-rs"]
+
+[dependencies]
+async-trait = "0.1"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+crossterm = "0.28"
+dashmap = "6.1"
+ratatui = "0.29"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1.40", features = ["full"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+yfinance-rs = { version = "0.7.2", optional = true }
+
+[dev-dependencies]
+tempfile = "3.14"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

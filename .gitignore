@@ -1,0 +1,21 @@
+# Rust build
+/target/
+
+# Release binaries (scripts/build_release.sh)
+/dist/
+
+# Local SQLite databases
+/data/*.db
+/data/*.db-*
+
+# Secrets
+.env
+
+# Local config overrides
+*.local.toml
+
+# Editor / OS
+*.swp
+.DS_Store
+.idea/
+.vscode/

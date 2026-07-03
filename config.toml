@@ -1,0 +1,23 @@
+[provider]
+# Primary: yahoo, then fcontext; mock is dev-only (not used as fallback)
+default = "yahoo"
+fallback = ["fcontext"]
+
+[provider.fcontext]
+cli = "fcontext"
+timeout_secs = 30
+
+[account]
+initial_cash = 100_000.0
+currency = "USD"
+
+[trading]
+commission_per_trade = 0.0
+slippage_bps = 5
+
+[cache]
+enabled = true
+ttl_secs = 60
+
+[watchlist]
+symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]

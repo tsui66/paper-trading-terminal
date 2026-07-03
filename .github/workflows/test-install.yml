@@ -1,0 +1,74 @@
+name: Test Install Scripts
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - install
+      - install.ps1
+      - .scoop/paper.json
+      - scripts/package_release.sh
+      - .github/workflows/test-install.yml
+  pull_request:
+    paths:
+      - install
+      - install.ps1
+      - .scoop/paper.json
+      - scripts/package_release.sh
+      - .github/workflows/test-install.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux (install)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release package
+        run: |
+          cargo build --release
+          mkdir -p dist
+          cp target/release/paper dist/paper
+          chmod +x dist/paper
+          tar czvf dist/paper-trading-terminal-linux-amd64.tar.gz -C dist paper
+
+      - name: Run install script (local package)
+        env:
+          PAPER_INSTALL_FROM: ${{ github.workspace }}/dist/paper-trading-terminal-linux-amd64.tar.gz
+          PAPER_INSTALL_VERSION: v0.0.0-ci
+        run: sh install
+
+      - name: Verify binary
+        run: paper --version
+
+  windows:
+    name: Windows (install.ps1)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release package
+        shell: pwsh
+        run: |
+          cargo build --release
+          Compress-Archive -Path target/release/paper.exe -DestinationPath paper-trading-terminal-windows-amd64.zip
+
+      - name: Run install.ps1 (local package)
+        shell: pwsh
+        env:
+          PAPER_INSTALL_FROM: ${{ github.workspace }}/paper-trading-terminal-windows-amd64.zip
+          PAPER_INSTALL_VERSION: v0.0.0-ci
+        run: ./install.ps1
+
+      - name: Verify binary
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:LOCALAPPDATA 'Programs\paper'
+          & "$installDir\paper.exe" --version

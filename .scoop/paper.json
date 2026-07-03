@@ -1,0 +1,23 @@
+{
+  "version": "0.1.0",
+  "description": "AI-native CLI for local US stock paper trading with real-time market data, portfolio, and trading.",
+  "homepage": "https://github.com/tsui66/paper-trading-terminal",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/tsui66/paper-trading-terminal/releases/download/v0.1.0/paper-trading-terminal-windows-amd64.zip",
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "bin": "paper.exe",
+  "checkver": {
+    "github": "https://github.com/tsui66/paper-trading-terminal"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/tsui66/paper-trading-terminal/releases/download/v$version/paper-trading-terminal-windows-amd64.zip"
+      }
+    }
+  }
+}
