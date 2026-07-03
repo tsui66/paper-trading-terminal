@@ -1,6 +1,6 @@
 use super::{
     Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
-    chain_exhausted_message,
+    chain_exhausted_message, symbol_providers_failed,
 };
 use crate::utils::normalize_symbol;
 use async_trait::async_trait;
@@ -48,9 +48,9 @@ impl FallbackProvider {
                 }
             }
         }
-        Err(ProviderError::Unavailable(chain_exhausted_message(
-            &self.label,
-            &errors.join("; "),
+        let sym = normalize_symbol(symbol);
+        Err(ProviderError::Unavailable(symbol_providers_failed(
+            &sym, &errors,
         )))
     }
 
@@ -336,6 +336,58 @@ mod tests {
         let out = chain.quotes(&["NVDA".into()]).await.unwrap();
         assert_eq!(out.len(), 1);
         assert!((out[0].price - 300.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn try_quote_falls_through_to_second_provider() {
+        let mut fallback = HashMap::new();
+        fallback.insert("MSFT".into(), quote("MSFT", 200.0, "fallback"));
+
+        let chain = FallbackProvider::new(vec![
+            Arc::new(StubProvider {
+                name: "yahoo",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: true,
+            }),
+            Arc::new(StubProvider {
+                name: "fcontext",
+                quotes: fallback,
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: true,
+            }),
+        ]);
+
+        let q = chain.quote("MSFT").await.unwrap();
+        assert_eq!(q.symbol, "MSFT");
+        assert_eq!(q.source.as_deref(), Some("fallback"));
+    }
+
+    #[tokio::test]
+    async fn try_quote_errors_when_all_providers_fail() {
+        let chain = FallbackProvider::new(vec![
+            Arc::new(StubProvider {
+                name: "yahoo",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: true,
+            }),
+            Arc::new(StubProvider {
+                name: "fcontext",
+                quotes: HashMap::new(),
+                fail_batch: true,
+                history_bars: 0,
+                fail_history: true,
+            }),
+        ]);
+
+        let err = chain.quote("NVDA").await.unwrap_err().to_string();
+        assert!(err.contains("NVDA"));
+        assert!(err.contains("yahoo"));
+        assert!(err.contains("fcontext"));
     }
 
     #[tokio::test]

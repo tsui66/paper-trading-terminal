@@ -2,7 +2,9 @@ use crate::config::AppConfig;
 use crate::db::Database;
 use crate::engine::TradingEngine;
 use crate::engine::order::OrderSide;
-use crate::provider::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote};
+use crate::provider::{
+    Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote, fetch_quotes_report,
+};
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
 use crate::tui::widgets::chart::CandlestickChart;
 use crate::utils::terminal_bell;
@@ -252,46 +254,42 @@ impl App {
 
     async fn refresh_quotes(&mut self) {
         let symbols = self.config.watchlist.symbols.clone();
-        match self.provider.quotes(&symbols).await {
-            Ok(new_quotes) => {
-                let fetched = new_quotes.len();
-                for q in new_quotes {
-                    if let Some(existing) = self
-                        .quotes
-                        .iter_mut()
-                        .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
-                    {
-                        *existing = q;
-                    } else {
-                        self.quotes.push(q);
-                    }
-                }
-                self.log_lines.push(format!(
-                    "Quotes {}/{} @ {}",
-                    fetched,
-                    symbols.len(),
-                    chrono::Utc::now().format("%H:%M:%S")
-                ));
-                if fetched < symbols.len() {
-                    let missing: Vec<&str> = symbols
-                        .iter()
-                        .filter(|sym| {
-                            !self
-                                .quotes
-                                .iter()
-                                .any(|q| q.symbol.eq_ignore_ascii_case(sym))
-                        })
-                        .map(String::as_str)
-                        .collect();
-                    if !missing.is_empty() {
-                        self.log_lines.push(format!(
-                            "Missing quotes: {} (run: paper config provider-status)",
-                            missing.join(", ")
-                        ));
-                    }
-                }
+        let report = fetch_quotes_report(self.provider.as_ref(), &symbols).await;
+
+        if report.all_failed() {
+            self.log_lines.push(format!(
+                "Quote error: yahoo and fcontext both failed for all {} symbols",
+                symbols.len()
+            ));
+            for f in &report.failures {
+                self.log_lines.push(format!("  {}", f.error));
             }
-            Err(e) => self.log_lines.push(format!("Quote error: {e}")),
+            self.log_lines
+                .push("  hint: paper config provider-status".into());
+            return;
+        }
+
+        let fetched = report.quotes.len();
+        for q in report.quotes {
+            if let Some(existing) = self
+                .quotes
+                .iter_mut()
+                .find(|x| x.symbol.eq_ignore_ascii_case(&q.symbol))
+            {
+                *existing = q;
+            } else {
+                self.quotes.push(q);
+            }
+        }
+        self.log_lines.push(format!(
+            "Quotes {}/{} @ {}",
+            fetched,
+            symbols.len(),
+            chrono::Utc::now().format("%H:%M:%S")
+        ));
+
+        for f in &report.failures {
+            self.log_lines.push(format!("Quote failed: {}", f.error));
         }
     }
 
@@ -330,7 +328,8 @@ impl App {
             }
             Err(e) => {
                 self.chart_candles.clear();
-                self.log_lines.push(format!("Chart {sym} error: {e}"));
+                self.log_lines
+                    .push(format!("Chart {sym} error (yahoo→fcontext): {e}"));
             }
         }
     }

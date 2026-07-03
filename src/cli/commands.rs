@@ -259,21 +259,42 @@ async fn cmd_positions(cli: &Cli, engine: &TradingEngine) -> Result<()> {
 }
 
 async fn cmd_quote(cli: &Cli, engine: &TradingEngine, symbols: &[String]) -> Result<()> {
+    use crate::provider::fetch_quotes_report;
+
     let syms: Vec<String> = if symbols.is_empty() {
         engine.config().watchlist.symbols.clone()
     } else {
         symbols.iter().map(|s| normalize_symbol(s)).collect()
     };
-    let quotes = engine.provider().quotes(&syms).await?;
+    let report = fetch_quotes_report(engine.provider(), &syms).await;
+
+    if report.all_failed() {
+        let mut msg = format!(
+            "quote failed: yahoo and fcontext both unavailable for all {} symbol(s)",
+            syms.len()
+        );
+        for f in &report.failures {
+            msg.push_str(&format!("\n  {}", f.error));
+        }
+        msg.push_str("\n  hint: paper config provider-status");
+        anyhow::bail!(msg);
+    }
+
     if cli.json {
-        output_json(&quotes)?;
+        output_json(&serde_json::json!({
+            "quotes": report.quotes,
+            "failures": report.failures,
+        }))?;
     } else {
-        for q in quotes {
+        for q in &report.quotes {
             let src = q.source.as_deref().unwrap_or("?");
             println!(
                 "{:6} ${:>8.2} {:+.2} ({:+.2}%) vol {} [{}]",
                 q.symbol, q.price, q.change, q.change_pct, q.volume, src
             );
+        }
+        for f in &report.failures {
+            eprintln!("quote failed: {}", f.error);
         }
     }
     Ok(())

@@ -10,6 +10,6 @@ pub mod utils;
 pub use config::AppConfig;
 pub use provider::{
     Candle, FallbackProvider, FcontextProvider, MarketDataProvider, ProviderKind, Quote,
-    create_provider, create_provider_stack,
+    QuoteFailure, QuoteFetchReport, create_provider, create_provider_stack, fetch_quotes_report,
 };
 pub use skill::{AgentSkill, agent_schema};

@@ -110,9 +110,65 @@ pub enum HistoryInterval {
 pub fn chain_exhausted_message(chain_label: &str, details: &str) -> String {
     format!(
         "Market data unavailable — provider chain exhausted ({chain_label}). \
-         Yahoo and fcontext both failed; operation aborted. \
+         Primary (yahoo) and fallback (fcontext) both failed. \
          Run `paper config provider-status` to diagnose. Details: {details}"
     )
+}
+
+/// Per-symbol failure after walking the provider chain (yahoo → fcontext).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuoteFailure {
+    pub symbol: String,
+    pub error: String,
+}
+
+/// Best-effort batch quote: tries each symbol through the full provider chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuoteFetchReport {
+    pub quotes: Vec<Quote>,
+    pub failures: Vec<QuoteFailure>,
+}
+
+impl QuoteFetchReport {
+    pub fn all_failed(&self) -> bool {
+        self.quotes.is_empty() && !self.failures.is_empty()
+    }
+}
+
+/// Fetch quotes per symbol (yahoo first, then fcontext via [`FallbackProvider::quote`]).
+pub async fn fetch_quotes_report(
+    provider: &dyn MarketDataProvider,
+    symbols: &[String],
+) -> QuoteFetchReport {
+    let normalized: Vec<String> = symbols
+        .iter()
+        .map(|s| crate::utils::normalize_symbol(s))
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut quotes = Vec::with_capacity(normalized.len());
+    let mut failures = Vec::new();
+
+    for sym in &normalized {
+        match provider.quote(sym).await {
+            Ok(q) => quotes.push(q),
+            Err(e) => failures.push(QuoteFailure {
+                symbol: sym.clone(),
+                error: e.to_string(),
+            }),
+        }
+    }
+
+    QuoteFetchReport { quotes, failures }
+}
+
+/// Compact message when every provider in the chain rejected a symbol.
+pub fn symbol_providers_failed(symbol: &str, attempts: &[String]) -> String {
+    if attempts.is_empty() {
+        format!("{symbol}: no provider returned a quote")
+    } else {
+        format!("{symbol}: {}", attempts.join("; "))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -192,7 +248,18 @@ mod hint_tests {
         let msg = chain_exhausted_message("yahoo→fcontext", "yahoo: timeout; fcontext: 402");
         assert!(msg.contains("chain exhausted"));
         assert!(msg.contains("provider-status"));
-        assert!(msg.contains("aborted"));
+        assert!(msg.contains("failed"));
+    }
+
+    #[test]
+    fn symbol_providers_failed_lists_attempts() {
+        let msg = symbol_providers_failed(
+            "MSFT",
+            &["yahoo: network timeout".into(), "fcontext: 402".into()],
+        );
+        assert!(msg.contains("MSFT"));
+        assert!(msg.contains("yahoo"));
+        assert!(msg.contains("fcontext"));
     }
 }
 

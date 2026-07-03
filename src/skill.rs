@@ -2,7 +2,7 @@
 
 use crate::cli::AppState;
 use crate::engine::order::OrderSide;
-use crate::provider::{HistoryInterval, HistoryRange, Quote};
+use crate::provider::{HistoryInterval, HistoryRange, Quote, fetch_quotes_report};
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -46,7 +46,17 @@ impl AgentSkill {
     }
 
     pub async fn quote(&self, symbols: &[String]) -> Result<Vec<Quote>> {
-        Ok(self.state.provider.quotes(symbols).await?)
+        let report = fetch_quotes_report(self.state.provider.as_ref(), symbols).await;
+        if report.all_failed() {
+            let detail = report
+                .failures
+                .iter()
+                .map(|f| f.error.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            anyhow::bail!("yahoo and fcontext both failed: {detail}");
+        }
+        Ok(report.quotes)
     }
 
     pub async fn buy(&self, symbol: &str, qty: f64) -> Result<serde_json::Value> {
