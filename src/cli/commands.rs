@@ -84,11 +84,11 @@ pub enum Commands {
 #[derive(Subcommand, Debug)]
 pub enum ConfigAction {
     Show,
-    /// Switch primary market-data provider (mock | fcontext | yahoo)
+    /// Switch primary market-data provider (yahoo | fcontext)
     SetProvider {
         provider: String,
     },
-    /// Set fallback chain, comma-separated (e.g. yahoo; mock is dev-only, not used as fallback)
+    /// Set fallback chain, comma-separated (e.g. fcontext)
     SetFallback {
         providers: String,
     },

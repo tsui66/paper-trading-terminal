@@ -179,7 +179,6 @@ timeout_secs = 30
 |----------|----------|-------|
 | 1 | **yahoo** | Default; free Yahoo Finance data (can be unstable) |
 | 2 | **fcontext** | Fallback CLI; install + `fcontext auth login` (see [fcontext CLI](#fcontext-cli)) |
-| — | **mock** | Synthetic prices; **dev/tests only**, never used as automatic fallback |
 
 ```
 yahoo ──fail──► fcontext ──fail──► error (operation aborted)
@@ -189,12 +188,6 @@ Diagnose the chain:
 
 ```bash
 paper config provider-status
-```
-
-Offline development (CI / no network):
-
-```bash
-paper config set-provider mock
 ```
 
 ## TUI
@@ -236,7 +229,7 @@ Limit fills ring the terminal bell and log `*** FILLED ***`.
 | `history` | Filled / cancelled order log |
 | `pnl` | Realized + unrealized P&L |
 | `config show` | Current settings |
-| `config set-provider NAME` | `yahoo` \| `fcontext` \| `mock` |
+| `config set-provider NAME` | `yahoo` \| `fcontext` |
 | `config set-fallback a,b` | Comma-separated fallback list |
 | `config provider-status` | Probe each provider + chain |
 | `schema` | Agent integration schema (JSON) |
@@ -299,7 +292,7 @@ let _schema = agent_schema();
 ## Development
 
 ```bash
-make test          # cargo test + mock CLI integration
+make test          # cargo test + CLI integration
 make lint          # fmt + clippy
 ./scripts/test/test_fcontext.sh   # skips if fcontext CLI missing
 ```
@@ -320,7 +313,7 @@ Push a `v*` tag to trigger [`.github/workflows/release.yml`](.github/workflows/r
 src/
   cli/          # Clap commands
   engine/       # TradingEngine, orders, fills
-  provider/     # yahoo, fcontext, mock, fallback chain
+  provider/     # yahoo, fcontext, fallback chain
   tui/          # Ratatui dashboard
   skill.rs      # AgentSkill + schema
 data/           # SQLite DBs (gitignored), test configs

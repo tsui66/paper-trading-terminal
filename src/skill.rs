@@ -28,7 +28,7 @@ pub fn agent_schema() -> Value {
         ],
         "cli_global_flags": ["--json", "--config", "--db"],
         "order_types": ["market", "limit"],
-        "providers": ["yahoo", "fcontext", "mock"]
+        "providers": ["yahoo", "fcontext"]
     })
 }
 
