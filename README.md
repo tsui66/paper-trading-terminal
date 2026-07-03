@@ -1,6 +1,6 @@
-# paper-trading-terminal
+<h1 align="center">paper-trading-terminal</h1>
 
-**AI-native CLI for US stock paper trading** — with real-time market data, portfolio, and trading.
+<p align="center"><strong>AI-native CLI for US stock paper trading</strong> — with real-time market data, portfolio, and trading.</p>
 
 <p align="center"><strong>Languages:</strong> English · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 

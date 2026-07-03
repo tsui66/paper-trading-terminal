@@ -1,6 +1,6 @@
-# paper-trading-terminal
+<h1 align="center">paper-trading-terminal</h1>
 
-**面向 AI 的美股模擬盤 CLI** — 即時行情、持倉組合與交易。
+<p align="center"><strong>面向 AI 的美股模擬盤 CLI</strong> — 即時行情、持倉組合與交易。</p>
 
 <p align="center"><strong>語言：</strong> <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · 繁體中文 · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
