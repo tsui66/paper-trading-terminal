@@ -15,8 +15,9 @@ build:
 	cargo build --release
 
 install-local: build
-	@echo "Installing to /usr/local/bin/paper"
-	sudo cp target/release/paper /usr/local/bin/paper
+	@mkdir -p "$(HOME)/.local/bin"
+	@cp target/release/paper "$(HOME)/.local/bin/paper"
+	@echo "Installed to $(HOME)/.local/bin/paper (no sudo)"
 
 # Host tarball for local smoke tests (matches release artifact naming)
 package: build

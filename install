@@ -67,6 +67,18 @@ fi
 
 tar zxf "$tmp_dir/$bin_name.tar.gz" -C "$tmp_dir"
 
+# Install target (no sudo by default — agent-friendly for OpenClaw / CI):
+#   default     → $HOME/.local/bin
+#   PAPER_INSTALL_DIR=/path  → explicit directory (must be user-writable)
+#   PAPER_INSTALL_SYSTEM=1   → /usr/local/bin (uses sudo when not root)
+if [ -n "${PAPER_INSTALL_DIR:-}" ]; then
+  install_dir="$PAPER_INSTALL_DIR"
+elif [ "${PAPER_INSTALL_SYSTEM:-}" = "1" ]; then
+  install_dir=/usr/local/bin
+else
+  install_dir="${HOME}/.local/bin"
+fi
+
 install_bin() {
   dest_dir=$1
   mkdir -p "$dest_dir"
@@ -74,18 +86,37 @@ install_bin() {
   chmod +x "$dest_dir/$bin_name"
 }
 
-if [ "$(id -u)" -eq 0 ]; then
-  install_bin /usr/local/bin
-  dest=/usr/local/bin/$bin_name
-else
-  sudo mkdir -p /usr/local/bin
-  sudo mv "$tmp_dir/$bin_name" /usr/local/bin/$bin_name
-  sudo chmod +x /usr/local/bin/$bin_name
-  dest=/usr/local/bin/$bin_name
-fi
+case "$install_dir" in
+  /usr/local/bin)
+    if [ "$(id -u)" -eq 0 ]; then
+      install_bin "$install_dir"
+    else
+      sudo mkdir -p "$install_dir"
+      sudo mv "$tmp_dir/$bin_name" "$install_dir/$bin_name"
+      sudo chmod +x "$install_dir/$bin_name"
+    fi
+    ;;
+  *)
+    install_bin "$install_dir"
+    ;;
+esac
+
+dest="$install_dir/$bin_name"
 
 echo ""
 echo "paper CLI $version installed to $dest"
+
+case ":$PATH:" in
+  *:"$install_dir":*) ;;
+  *)
+    echo ""
+    echo "Add to PATH for this shell:"
+    echo "  export PATH=\"$install_dir:\$PATH\""
+    echo ""
+    echo "Persist (zsh): echo 'export PATH=\"$install_dir:\$PATH\"' >> ~/.zshrc"
+    echo "Persist (bash): echo 'export PATH=\"$install_dir:\$PATH\"' >> ~/.bashrc"
+    ;;
+esac
 echo ""
 echo "Next steps:"
 echo "  paper -h                      # verify install"

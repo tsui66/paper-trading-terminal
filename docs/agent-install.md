@@ -20,10 +20,14 @@ Rules:
 - Prefer the official installer; build from source only if the installer fails or the user already has the repo cloned.
 
 Install (pick one):
-- macOS / Linux:
+- macOS / Linux (no sudo — installs to ~/.local/bin):
   curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+  export PATH="$HOME/.local/bin:$PATH"
 - Windows (PowerShell):
   iwr https://github.com/tsui66/paper-trading-terminal/raw/main/install.ps1 | iex
+
+System-wide install (macOS/Linux, requires password):
+  PAPER_INSTALL_SYSTEM=1 curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
 
 Alternatives if needed:
 - macOS/Linux Homebrew: brew install --cask tsui66/tap/paper-trading-terminal
@@ -99,11 +103,14 @@ Agent integration: use `paper <cmd> --json` and `paper schema --json` for comman
 ```text
 Goal: set up paper-trading-terminal so I can paper-trade US stocks from the terminal and via JSON CLI.
 
-Install `paper`:
-- Unix: curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+Install `paper` (no password on Unix — do NOT use sudo):
+- Unix:
+  curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+  export PATH="$HOME/.local/bin:$PATH"
 - Windows: iwr https://github.com/tsui66/paper-trading-terminal/raw/main/install.ps1 | iex
 
 You must run these commands yourself in the sandbox/shell, not delegate to me.
+If `paper` is not found after install, run the export PATH line above (Unix) or restart the terminal (Windows).
 
 After install:
 - paper config provider-status

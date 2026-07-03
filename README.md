@@ -59,14 +59,17 @@ Pick your platform and run **one** command.
 
 ```bash
 curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
+export PATH="$HOME/.local/bin:$PATH"   # if `paper` not found
 ```
+
+Installs to `~/.local/bin` by default — **no sudo / password** (agent-friendly). System-wide: `PAPER_INSTALL_SYSTEM=1` before the curl pipe.
 
 You should see:
 
 ```text
 Installing paper-trading-terminal@v…
 Downloading https://github.com/tsui66/paper-trading-terminal/releases/download/…
-paper CLI v… installed to /usr/local/bin/paper
+paper CLI v… installed to /Users/you/.local/bin/paper
 
 Next steps:
   paper -h                      # verify install
@@ -105,7 +108,7 @@ git clone https://github.com/tsui66/paper-trading-terminal
 cd paper-trading-terminal
 cargo build --release
 # binary: ./target/release/paper
-make install-local   # optional: copy to /usr/local/bin
+make install-local   # optional: copy to ~/.local/bin (no sudo)
 ```
 
 Fork or self-hosted releases:
