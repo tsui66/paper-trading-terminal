@@ -16,6 +16,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub struct App {
     pub should_quit: bool,
@@ -34,6 +35,8 @@ pub struct App {
     cancel_order_idx: Option<usize>,
     order_entry: Option<OrderEntry>,
     pending_submit: Option<SubmitRequest>,
+    last_quote_refresh: Instant,
+    quote_refresh_interval: Duration,
 }
 
 impl App {
@@ -65,6 +68,8 @@ impl App {
             cancel_order_idx: None,
             order_entry: None,
             pending_submit: None,
+            last_quote_refresh: Instant::now(),
+            quote_refresh_interval: Duration::from_secs(5),
         })
     }
 
@@ -143,9 +148,9 @@ impl App {
         }
     }
 
-    pub async fn on_tick(&mut self) -> Result<()> {
+    pub async fn on_tick(&mut self) {
         if let Some(req) = self.pending_submit.take() {
-            self.execute_order(req).await?;
+            self.execute_order(req).await;
         }
 
         let cancel_target = self.cancel_order_idx.take().and_then(|idx| {
@@ -162,35 +167,45 @@ impl App {
                 )),
                 Err(e) => self.log_lines.push(format!("Cancel failed: {e}")),
             }
+            self.clamp_orders_idx();
+        }
+
+        if self.last_quote_refresh.elapsed() >= self.quote_refresh_interval {
+            self.last_quote_refresh = Instant::now();
+            self.refresh_pending = true;
         }
 
         if self.refresh_pending {
             self.refresh_pending = false;
-            self.refresh_quotes().await?;
-            let filled = self.engine.process_pending_orders().await?;
-            for o in filled {
-                terminal_bell();
-                self.log_lines.push(format!(
-                    "*** FILLED *** {} {} {:.0} @ ${:.2}",
-                    format!("{:?}", o.side).to_uppercase(),
-                    o.symbol,
-                    o.filled_qty,
-                    o.avg_fill_price
-                ));
+            self.refresh_quotes().await;
+            match self.engine.process_pending_orders().await {
+                Ok(filled) => {
+                    for o in filled {
+                        terminal_bell();
+                        self.log_lines.push(format!(
+                            "*** FILLED *** {} {} {:.0} @ ${:.2}",
+                            format!("{:?}", o.side).to_uppercase(),
+                            o.symbol,
+                            o.filled_qty,
+                            o.avg_fill_price
+                        ));
+                    }
+                    self.clamp_orders_idx();
+                }
+                Err(e) => self.log_lines.push(format!("Process orders error: {e}")),
             }
-            self.update_equity().await?;
+            self.update_equity().await;
         }
 
         if self.chart_pending {
             self.chart_pending = false;
-            self.load_chart().await?;
+            self.load_chart().await;
         }
 
         self.trim_log();
-        Ok(())
     }
 
-    async fn execute_order(&mut self, req: SubmitRequest) -> Result<()> {
+    async fn execute_order(&mut self, req: SubmitRequest) {
         let result = if let Some(limit) = req.limit {
             self.engine
                 .submit_limit_order(&req.symbol, req.side, req.qty, limit)
@@ -219,15 +234,15 @@ impl App {
                         o.qty,
                         o.limit_price.unwrap_or(0.0)
                     ));
+                    self.clamp_orders_idx();
                 }
-                self.update_equity().await?;
+                self.update_equity().await;
             }
             Err(e) => self.log_lines.push(format!("Order error: {e}")),
         }
-        Ok(())
     }
 
-    async fn refresh_quotes(&mut self) -> Result<()> {
+    async fn refresh_quotes(&mut self) {
         let symbols = self.config.watchlist.symbols.clone();
         match self.provider.quotes(&symbols).await {
             Ok(q) => {
@@ -240,26 +255,30 @@ impl App {
             }
             Err(e) => self.log_lines.push(format!("Quote error: {e}")),
         }
-        Ok(())
     }
 
-    async fn update_equity(&mut self) -> Result<()> {
+    async fn update_equity(&mut self) {
         let mut marks = Vec::new();
         for pos in self.engine.positions() {
-            if let Some(q) = self.quotes.iter().find(|q| q.symbol == pos.symbol) {
-                marks.push((pos.symbol.clone(), q.price));
+            let price = if let Some(q) = self
+                .quotes
+                .iter()
+                .find(|q| q.symbol.eq_ignore_ascii_case(&pos.symbol))
+            {
+                q.price
+            } else if let Ok(q) = self.engine.quote(&pos.symbol).await {
+                q.price
             } else {
-                let q = self.engine.quote(&pos.symbol).await?;
-                marks.push((pos.symbol.clone(), q.price));
-            }
+                pos.avg_cost
+            };
+            marks.push((pos.symbol.clone(), price));
         }
         self.equity = self.engine.account.equity(&marks);
-        Ok(())
     }
 
-    async fn load_chart(&mut self) -> Result<()> {
+    async fn load_chart(&mut self) {
         let Some(sym) = self.chart_symbol.clone() else {
-            return Ok(());
+            return;
         };
         match self
             .provider
@@ -276,7 +295,15 @@ impl App {
                 self.log_lines.push(format!("Chart {sym} error: {e}"));
             }
         }
-        Ok(())
+    }
+
+    fn clamp_orders_idx(&mut self) {
+        let n = self.engine.pending_orders().len();
+        if n == 0 {
+            self.orders_idx = 0;
+        } else if self.orders_idx >= n {
+            self.orders_idx = n - 1;
+        }
     }
 
     fn trim_log(&mut self) {
@@ -286,6 +313,13 @@ impl App {
     }
 
     pub fn render(&self, f: &mut Frame) {
+        let area = f.area();
+        if area.width < 20 || area.height < 12 {
+            let msg = Paragraph::new("Terminal too small — resize window (min 80x24 recommended)");
+            f.render_widget(msg, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

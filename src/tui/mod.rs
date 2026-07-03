@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::io;
+use std::io::{self, stdout};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -27,7 +27,7 @@ pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
     let tick_rate = Duration::from_millis(500);
     let mut last_tick = std::time::Instant::now();
 
-    loop {
+    let loop_result: Result<()> = loop {
         terminal.draw(|f| app.render(f))?;
 
         let timeout = tick_rate
@@ -36,30 +36,32 @@ pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
 
         #[allow(clippy::collapsible_if)]
         if crossterm::event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key(key.code);
+            match event::read()? {
+                Event::Key(key) => app.handle_key(key.code),
+                Event::Resize(_, _) => {}
+                _ => {}
             }
         }
 
         if last_tick.elapsed() >= tick_rate {
-            app.on_tick().await?;
+            app.on_tick().await;
             last_tick = std::time::Instant::now();
         }
 
         if app.should_quit {
-            break;
+            break Ok(());
         }
-    }
+    };
 
     teardown_terminal(terminal)?;
-    Ok(())
+    loop_result
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
+    let mut out = stdout();
+    execute!(out, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(out);
     Ok(Terminal::new(backend)?)
 }
 
