@@ -61,6 +61,83 @@ cargo build --release
 make install-local   # optional: copy to /usr/local/bin
 ```
 
+## fcontext CLI
+
+`paper` uses the [Financial Context](https://docs.fcontext.com) CLI as the **fallback market-data provider** when Yahoo is unavailable. Install and sign in once; `paper` shells out to `fcontext` (or `fctx`) automatically.
+
+### Install
+
+**macOS (Homebrew)**
+
+```bash
+brew install --cask aitaport/tap/fcontext-cli
+```
+
+**Linux / macOS (script)**
+
+```bash
+curl -sSL https://github.com/aitaport/fcontext-cli/releases/latest/download/install.sh | sh
+```
+
+**Windows (Scoop)**
+
+```powershell
+scoop install https://github.com/aitaport/fcontext-cli/releases/latest/download/fcontext.json
+```
+
+**Windows (PowerShell)**
+
+```powershell
+iwr https://github.com/aitaport/fcontext-cli/releases/latest/download/install.ps1 | iex
+```
+
+Installers verify the release `.sha256` checksum and place both `fcontext` and `fctx` on your `PATH`.
+
+### Authenticate
+
+Sign in with OAuth (works in local terminals, SSH, and headless servers):
+
+```bash
+fcontext auth login
+```
+
+Open the printed URL in a browser, authorize, then redeem the code:
+
+```bash
+fcontext auth login --auth-code YOUR_CODE
+```
+
+The CLI stores the token locally (`oauth-token.json` in the fcontext config directory). Later commands reuse it automatically.
+
+Check status or sign out:
+
+```bash
+fcontext auth status
+fcontext auth status --format json
+fcontext auth logout
+```
+
+### Verify
+
+```bash
+fcontext check
+fcontext quote AAPL.US --format json
+paper config provider-status
+```
+
+`paper` accepts symbols like `AAPL`; the fcontext provider maps them to `AAPL.US` internally.
+
+### Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| `CLI not found: fcontext` | Install fcontext (above) or set `provider.fcontext.cli` in `config.toml` |
+| `Missing fcontext credentials` | Run `fcontext auth login` |
+| `fcontext API error (401)` | Run `fcontext auth status`, then `fcontext auth login` again |
+| `fcontext subscription required (402)` | Upgrade Financial Context plan or use `paper config set-provider mock` for offline dev |
+
+More commands and agent-oriented JSON output: [fcontext CLI docs](https://docs.fcontext.com).
+
 ## Quick start
 
 ```bash
@@ -107,7 +184,7 @@ timeout_secs = 30
 | Priority | Provider | Notes |
 |----------|----------|-------|
 | 1 | **yahoo** | Build with `--features yahoo`; free, can be unstable |
-| 2 | **fcontext** | Subprocess CLI; needs install + auth (`FCONTEXT_API_KEY` / `FCONTEXT_ACCESS_TOKEN`) |
+| 2 | **fcontext** | Subprocess CLI; install + `fcontext auth login` (see [fcontext CLI](#fcontext-cli)) |
 | — | **mock** | Synthetic prices; **dev/tests only**, never used as automatic fallback |
 
 ```
@@ -193,7 +270,7 @@ ttl_secs = 60
 symbols = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
 ```
 
-Copy `.env.example` for optional fcontext credentials and `RUST_LOG`.
+Copy `.env.example` for optional env overrides and `RUST_LOG`. fcontext auth is managed by the `fcontext` CLI, not `paper`.
 
 ## Agents & library
 
