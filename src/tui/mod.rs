@@ -1,7 +1,5 @@
 mod app;
 mod order_entry;
-pub mod preview;
-mod screenshot;
 mod widgets;
 
 use crate::config::AppConfig;

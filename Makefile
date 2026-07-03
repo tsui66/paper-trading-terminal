@@ -1,4 +1,4 @@
-.PHONY: test lint build ci install-local package screenshot
+.PHONY: test lint build ci install-local package
 
 test:
 	cargo test
@@ -20,7 +20,3 @@ install-local: build
 # Host tarball for local smoke tests (matches release artifact naming)
 package: build
 	@./scripts/package_release.sh
-
-# Regenerate README screenshot (deterministic mock data)
-screenshot:
-	cargo run --example capture_tui_screenshot

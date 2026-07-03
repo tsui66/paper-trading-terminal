@@ -2,14 +2,11 @@ use crate::config::AppConfig;
 use crate::db::Database;
 use crate::engine::TradingEngine;
 use crate::engine::order::OrderSide;
-use crate::provider::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, MockProvider, Quote,
-};
+use crate::provider::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote};
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
 use crate::tui::widgets::chart::CandlestickChart;
 use crate::utils::terminal_bell;
 use anyhow::Result;
-use chrono::TimeZone;
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
@@ -18,7 +15,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
-use std::path::Path;
 use std::sync::Arc;
 
 pub struct App {
@@ -476,122 +472,4 @@ impl App {
             chunks[1],
         );
     }
-}
-
-impl App {
-    /// Build a demo app and write one TUI frame to PNG (for docs).
-    pub async fn capture_screenshot(path: impl AsRef<Path>) -> Result<()> {
-        let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
-        let mut app = Self::new_for_screenshot().await?;
-        app.seed_screenshot_demo().await?;
-
-        let backend = ratatui::backend::TestBackend::new(120, 36);
-        let mut terminal = ratatui::Terminal::new(backend)?;
-        terminal.draw(|f| app.render(f))?;
-        super::screenshot::buffer_to_png(terminal.backend().buffer(), path)?;
-        Ok(())
-    }
-
-    async fn new_for_screenshot() -> Result<Self> {
-        let mut config = AppConfig::default();
-        config.provider.default = "mock".into();
-        config.provider.fallback.clear();
-        config.watchlist.symbols = vec![
-            "AAPL".into(),
-            "MSFT".into(),
-            "NVDA".into(),
-            "GOOGL".into(),
-            "AMZN".into(),
-            "META".into(),
-            "TSLA".into(),
-        ];
-
-        let provider = Arc::new(MockProvider::new()) as Arc<dyn MarketDataProvider>;
-        let db = Database::open(std::env::temp_dir().join("paper-tui-preview.db"))?;
-        Self::new(config, provider, db)
-    }
-
-    async fn seed_screenshot_demo(&mut self) -> Result<()> {
-        self.quotes = screenshot_quotes();
-        self.chart_symbol = Some("AAPL".into());
-        self.chart_candles = screenshot_candles("AAPL");
-        self.watchlist_idx = 0;
-        self.orders_idx = 0;
-        self.log_lines = vec![
-            "Paper Trading Terminal".into(),
-            "j/k:watchlist b:buy s:sell m:market/limit x:cancel r:refresh q:quit".into(),
-            "Quotes 7 @ 14:30:00".into(),
-            "Chart AAPL: 66 bars".into(),
-            "Filled BUY AAPL 10 @ $198.75".into(),
-            "*** FILLED *** BUY MSFT 5 @ $425.50".into(),
-        ];
-
-        self.engine
-            .submit_market_order("AAPL", OrderSide::Buy, 10.0)
-            .await?;
-        self.engine
-            .submit_limit_order("MSFT", OrderSide::Buy, 5.0, 400.0)
-            .await?;
-        self.update_equity().await?;
-        Ok(())
-    }
-}
-
-fn screenshot_ts() -> chrono::DateTime<chrono::Utc> {
-    chrono::Utc
-        .with_ymd_and_hms(2026, 7, 3, 14, 30, 0)
-        .single()
-        .expect("screenshot timestamp")
-}
-
-fn screenshot_quotes() -> Vec<Quote> {
-    vec![
-        screenshot_quote("AAPL", 198.75, 0.25, 0.13),
-        screenshot_quote("MSFT", 425.50, 0.30, 0.07),
-        screenshot_quote("NVDA", 129.10, 0.35, 0.27),
-        screenshot_quote("GOOGL", 178.90, -0.40, -0.22),
-        screenshot_quote("AMZN", 196.20, 0.40, 0.20),
-        screenshot_quote("META", 586.00, 0.60, 0.10),
-        screenshot_quote("TSLA", 249.30, -0.60, -0.24),
-    ]
-}
-
-fn screenshot_quote(symbol: &str, price: f64, change: f64, change_pct: f64) -> Quote {
-    Quote {
-        symbol: symbol.into(),
-        price,
-        change,
-        change_pct,
-        volume: 1_200_000,
-        timestamp: screenshot_ts(),
-        source: Some("mock".into()),
-    }
-}
-
-fn screenshot_candles(symbol: &str) -> Vec<Candle> {
-    let base = 185.0;
-    (0..66)
-        .map(|i| {
-            let t = i as f64 / 10.0;
-            let wave = t.sin() * 4.0 + (t * 0.35).cos() * 2.5;
-            let close = base + wave + i as f64 * 0.18;
-            let open = close - 0.6;
-            let high = close + 1.1;
-            let low = open - 0.9;
-            Candle {
-                symbol: symbol.into(),
-                open,
-                high,
-                low,
-                close,
-                volume: 480_000 + i as u64 * 2_500,
-                timestamp: screenshot_ts() - chrono::Duration::days(66 - i),
-                source: Some("mock".into()),
-            }
-        })
-        .collect()
 }

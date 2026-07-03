@@ -298,7 +298,6 @@ let _schema = agent_schema();
 ```bash
 make test          # cargo test + mock CLI integration
 make lint          # fmt + clippy
-make screenshot    # regenerate docs/tui-screenshot.png
 ./scripts/test/test_fcontext.sh   # skips if fcontext CLI missing
 ```
 
