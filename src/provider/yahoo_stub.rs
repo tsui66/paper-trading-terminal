@@ -1,7 +1,5 @@
 use super::cache::QuoteCache;
-use super::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
-};
+use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
 
 /// Stub Yahoo provider when `yahoo` feature is disabled at compile time.

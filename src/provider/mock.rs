@@ -3,9 +3,7 @@
 //! Not used in the automatic fallback chain — paper trading needs real quotes.
 //! Enable explicitly: `paper config set-provider mock`.
 
-use super::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
-};
+use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use std::collections::hash_map::DefaultHasher;
@@ -24,6 +22,12 @@ const BASE_PRICES: &[(&str, f64)] = &[
 ];
 
 pub struct MockProvider;
+
+impl Default for MockProvider {
+    fn default() -> Self {
+        Self
+    }
+}
 
 impl MockProvider {
     pub fn new() -> Self {
@@ -100,7 +104,8 @@ impl MockProvider {
             let open = price;
             let close = (open + drift).max(0.01);
             let high = open.max(close) + Self::jitter(&format!("{sym}-h-{i}"), 0.5).abs();
-            let low = (open.min(close) - Self::jitter(&format!("{sym}-l-{i}"), 0.5).abs()).max(0.01);
+            let low =
+                (open.min(close) - Self::jitter(&format!("{sym}-l-{i}"), 0.5).abs()).max(0.01);
             price = close;
             out.push(Candle {
                 symbol: sym.clone(),

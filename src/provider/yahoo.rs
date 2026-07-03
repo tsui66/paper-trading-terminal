@@ -1,7 +1,5 @@
 use super::cache::QuoteCache;
-use super::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
-};
+use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
 use chrono::{TimeZone, Utc};
 use yfinance_rs::core::conversions::money_to_f64;

@@ -99,10 +99,7 @@ impl OrderEntry {
         };
         format!(
             "{side} {mode} {} qty={}{}{}  [Enter] submit  [m] mode  [Esc] cancel",
-            self.symbol,
-            self.qty,
-            qty_cursor,
-            limit_part
+            self.symbol, self.qty, qty_cursor, limit_part
         )
     }
 }

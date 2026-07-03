@@ -1,5 +1,5 @@
-use crate::engine::order::{OrderSide, OrderType};
 use crate::engine::TradingEngine;
+use crate::engine::order::{OrderSide, OrderType};
 use crate::provider::{HistoryInterval, HistoryRange};
 use crate::utils::{normalize_symbol, output_json};
 use anyhow::Result;
@@ -37,9 +37,7 @@ pub enum Commands {
     /// List open positions
     Positions,
     /// Real-time quotes for symbols
-    Quote {
-        symbols: Vec<String>,
-    },
+    Quote { symbols: Vec<String> },
     /// Historical OHLCV candles
     Historical {
         symbol: String,
@@ -65,9 +63,7 @@ pub enum Commands {
         limit: Option<f64>,
     },
     /// Cancel a pending limit order by ID
-    Cancel {
-        id: String,
-    },
+    Cancel { id: String },
     /// List open pending orders
     Orders,
     /// Order history
@@ -89,9 +85,13 @@ pub enum Commands {
 pub enum ConfigAction {
     Show,
     /// Switch primary market-data provider (mock | fcontext | yahoo)
-    SetProvider { provider: String },
+    SetProvider {
+        provider: String,
+    },
     /// Set fallback chain, comma-separated (e.g. yahoo; mock is dev-only, not used as fallback)
-    SetFallback { providers: String },
+    SetFallback {
+        providers: String,
+    },
     /// Probe each provider in the chain with a test quote
     ProviderStatus,
 }
@@ -158,7 +158,10 @@ pub fn cmd_schema(cli: &Cli) {
     if cli.json {
         let _ = output_json(&schema);
     } else {
-        println!("{}", serde_json::to_string_pretty(&schema).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&schema).unwrap_or_default()
+        );
     }
 }
 
@@ -230,7 +233,10 @@ async fn cmd_portfolio(cli: &Cli, engine: &TradingEngine) -> Result<()> {
             view.account.equity, view.unrealized_pnl
         );
         for m in &view.marks {
-            println!("  {:6} ${:>8.2}  value ${:.2}", m.symbol, m.price, m.market_value);
+            println!(
+                "  {:6} ${:>8.2}  value ${:.2}",
+                m.symbol, m.price, m.market_value
+            );
         }
     }
     Ok(())
@@ -287,7 +293,10 @@ async fn cmd_historical(
     if cli.json {
         output_json(&candles)?;
     } else {
-        println!("{sym} historical ({range:?}/{interval:?}) — {} bars", candles.len());
+        println!(
+            "{sym} historical ({range:?}/{interval:?}) — {} bars",
+            candles.len()
+        );
         for c in candles.iter().take(5) {
             println!(
                 "  {} O:{:.2} H:{:.2} L:{:.2} C:{:.2} V:{}",
@@ -413,7 +422,11 @@ async fn cmd_history(cli: &Cli, engine: &TradingEngine) -> Result<()> {
                 format!("{:?}", o.side).to_uppercase(),
                 typ,
                 o.symbol,
-                if o.filled_qty > 0.0 { o.filled_qty } else { o.qty },
+                if o.filled_qty > 0.0 {
+                    o.filled_qty
+                } else {
+                    o.qty
+                },
                 if o.avg_fill_price > 0.0 {
                     o.avg_fill_price
                 } else {
@@ -442,13 +455,20 @@ async fn cmd_pnl(cli: &Cli, engine: &TradingEngine) -> Result<()> {
     if cli.json {
         output_json(&body)?;
     } else {
-        println!("Equity ${:.2} | total PnL ${:+.2} | unrealized ${:+.2}", equity, total, unrealized);
+        println!(
+            "Equity ${:.2} | total PnL ${:+.2} | unrealized ${:+.2}",
+            equity, total, unrealized
+        );
         println!("Return {:.2}%", (total / initial) * 100.0);
     }
     Ok(())
 }
 
-async fn cmd_config(cli: &Cli, engine: &TradingEngine, action: Option<&ConfigAction>) -> Result<()> {
+async fn cmd_config(
+    cli: &Cli,
+    engine: &TradingEngine,
+    action: Option<&ConfigAction>,
+) -> Result<()> {
     let config_path = crate::config::AppConfig::config_path(cli.config.as_deref())?;
 
     match action {
@@ -474,9 +494,11 @@ async fn cmd_config(cli: &Cli, engine: &TradingEngine, action: Option<&ConfigAct
                 println!("provider:  {}", engine.config().provider.default);
                 println!("fallback:  {:?}", engine.config().provider.fallback);
                 println!("chain:     {}", engine.provider().name());
-                println!("fcontext:  {} (timeout {}s)",
+                println!(
+                    "fcontext:  {} (timeout {}s)",
                     engine.config().provider.fcontext.cli,
-                    engine.config().provider.fcontext.timeout_secs);
+                    engine.config().provider.fcontext.timeout_secs
+                );
                 println!("initial_cash: {}", engine.config().account.initial_cash);
                 println!("watchlist: {:?}", engine.config().watchlist.symbols);
             }
@@ -492,7 +514,11 @@ async fn cmd_config(cli: &Cli, engine: &TradingEngine, action: Option<&ConfigAct
                     "provider": config.provider.default,
                 }))?;
             } else {
-                println!("Saved provider = '{}' to {}", config.provider.default, config_path.display());
+                println!(
+                    "Saved provider = '{}' to {}",
+                    config.provider.default,
+                    config_path.display()
+                );
             }
         }
         Some(ConfigAction::SetFallback { providers }) => {
@@ -523,7 +549,7 @@ async fn cmd_config(cli: &Cli, engine: &TradingEngine, action: Option<&ConfigAct
 
 async fn cmd_provider_status(cli: &Cli, engine: &TradingEngine) -> Result<()> {
     use crate::config::AppConfig;
-    use crate::provider::{create_provider_stack, QuoteCache};
+    use crate::provider::{QuoteCache, create_provider_stack};
 
     let config = engine.config();
     let kinds = config.provider_chain();
@@ -574,9 +600,7 @@ async fn cmd_provider_status(cli: &Cli, engine: &TradingEngine) -> Result<()> {
         let chain_probe = engine.provider().quote("AAPL").await;
         if chain_probe.is_err() {
             println!();
-            println!(
-                "Chain probe FAILED — market data aborted until a provider is healthy."
-            );
+            println!("Chain probe FAILED — market data aborted until a provider is healthy.");
         }
     }
     Ok(())

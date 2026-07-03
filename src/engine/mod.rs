@@ -56,11 +56,8 @@ impl TradingEngine {
         qty: f64,
     ) -> Result<order::Order> {
         let quote = self.provider.quote(symbol).await?;
-        let fill_price = crate::utils::apply_slippage(
-            quote.price,
-            side,
-            self.config.trading.slippage_bps,
-        );
+        let fill_price =
+            crate::utils::apply_slippage(quote.price, side, self.config.trading.slippage_bps);
         let commission = self.config.trading.commission_per_trade;
 
         let order = self
@@ -80,9 +77,7 @@ impl TradingEngine {
         qty: f64,
         limit_price: f64,
     ) -> Result<order::Order> {
-        let order = self
-            .executor
-            .submit_limit(symbol, side, qty, limit_price)?;
+        let order = self.executor.submit_limit(symbol, side, qty, limit_price)?;
         self.db.upsert_order(&self.account.id, &order)?;
         Ok(order)
     }

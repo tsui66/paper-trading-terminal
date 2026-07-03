@@ -2,8 +2,6 @@
 
 **AI-native CLI for local US stock paper trading** — with real-time market data, portfolio, and trading. Every command `--json`-ready; Ratatui TUI for humans; `paper schema` as the agent contract.
 
-Inspired by [rust-finance](https://github.com/Ashutosh0x/rust-finance).
-
 ## Features
 
 - **Paper account** — cash, positions, mark-to-market PnL, persisted in SQLite

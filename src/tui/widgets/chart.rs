@@ -1,13 +1,13 @@
 use crate::provider::Candle;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Color,
     symbols::Marker,
     widgets::{
-        canvas::{Canvas, Line, Rectangle},
         Block, Borders,
+        canvas::{Canvas, Line, Rectangle},
     },
-    Frame,
 };
 
 pub struct CandlestickChart<'a> {
@@ -58,11 +58,7 @@ impl<'a> CandlestickChart<'a> {
                     // Body
                     let body_low = c.open.min(c.close);
                     let body_high = c.open.max(c.close);
-                    let color = if bullish {
-                        Color::Green
-                    } else {
-                        Color::Red
-                    };
+                    let color = if bullish { Color::Green } else { Color::Red };
 
                     if (body_high - body_low).abs() < f64::EPSILON {
                         ctx.draw(&Line {

@@ -124,7 +124,8 @@ impl AppConfig {
         for fb in &self.provider.fallback {
             let kind = crate::provider::ProviderKind::parse(fb);
             // Mock is offline/dev-only — never auto-fallback to synthetic prices.
-            if kind == crate::provider::ProviderKind::Mock && primary != crate::provider::ProviderKind::Mock
+            if kind == crate::provider::ProviderKind::Mock
+                && primary != crate::provider::ProviderKind::Mock
             {
                 tracing::warn!(
                     "ignoring mock in fallback chain; use `paper config set-provider mock` for offline dev"
@@ -168,17 +169,17 @@ mod provider_chain_tests {
     #[test]
     fn mock_is_excluded_from_fallback_unless_primary() {
         let cfg = AppConfig {
-                provider: ProviderConfig {
-                    default: "yahoo".into(),
-                    fallback: vec!["fcontext".into(), "mock".into()],
-                    fcontext: FcontextConfig::default(),
-                },
-                ..AppConfig::default()
-            };
-            let chain = cfg.provider_chain();
-            assert_eq!(chain.len(), 2);
-            assert_eq!(chain[0], crate::provider::ProviderKind::Yahoo);
-            assert_eq!(chain[1], crate::provider::ProviderKind::Fcontext);
+            provider: ProviderConfig {
+                default: "yahoo".into(),
+                fallback: vec!["fcontext".into(), "mock".into()],
+                fcontext: FcontextConfig::default(),
+            },
+            ..AppConfig::default()
+        };
+        let chain = cfg.provider_chain();
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[0], crate::provider::ProviderKind::Yahoo);
+        assert_eq!(chain[1], crate::provider::ProviderKind::Fcontext);
     }
 
     #[test]
@@ -191,7 +192,10 @@ mod provider_chain_tests {
             },
             ..AppConfig::default()
         };
-        assert_eq!(cfg.provider_chain(), vec![crate::provider::ProviderKind::Mock]);
+        assert_eq!(
+            cfg.provider_chain(),
+            vec![crate::provider::ProviderKind::Mock]
+        );
     }
 }
 

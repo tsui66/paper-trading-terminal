@@ -5,7 +5,7 @@ use crate::engine::order::OrderSide;
 use crate::provider::{HistoryInterval, HistoryRange, Quote};
 use anyhow::Result;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Serialize)]
 pub struct SkillResponse<T: Serialize> {
@@ -116,12 +116,7 @@ impl AgentSkill {
         }
         let mark_pairs: Vec<(String, f64)> = marks
             .iter()
-            .filter_map(|m| {
-                Some((
-                    m["symbol"].as_str()?.to_string(),
-                    m["price"].as_f64()?,
-                ))
-            })
+            .filter_map(|m| Some((m["symbol"].as_str()?.to_string(), m["price"].as_f64()?)))
             .collect();
         let (equity, unrealized) = {
             let engine = self.state.engine().await?;

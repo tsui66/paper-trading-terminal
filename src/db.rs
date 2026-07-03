@@ -3,7 +3,7 @@ use crate::engine::account::{Account, Position};
 use crate::engine::order::Order;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
@@ -67,9 +67,9 @@ impl Database {
     }
 
     pub fn load_or_create_account(&self, config: &AppConfig) -> Result<Account> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, cash, currency, created_at, updated_at FROM accounts LIMIT 1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, cash, currency, created_at, updated_at FROM accounts LIMIT 1")?;
         let mut rows = stmt.query([])?;
         if let Some(row) = rows.next()? {
             let id: String = row.get(0)?;

@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::db::Database;
-use crate::engine::order::OrderSide;
 use crate::engine::TradingEngine;
+use crate::engine::order::OrderSide;
 use crate::provider::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, Quote};
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
 use crate::tui::widgets::chart::CandlestickChart;
@@ -9,11 +9,11 @@ use crate::utils::terminal_bell;
 use anyhow::Result;
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 use std::sync::Arc;
 
@@ -101,8 +101,8 @@ impl App {
             KeyCode::Char('s') => self.start_order(OrderSide::Sell),
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.config.watchlist.symbols.is_empty() {
-                    self.watchlist_idx = (self.watchlist_idx + 1)
-                        .min(self.config.watchlist.symbols.len() - 1);
+                    self.watchlist_idx =
+                        (self.watchlist_idx + 1).min(self.config.watchlist.symbols.len() - 1);
                     self.select_watchlist(self.watchlist_idx);
                 }
             }
@@ -314,7 +314,9 @@ impl App {
             .iter()
             .map(|l| {
                 let style = if l.contains("FILLED") {
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -463,11 +465,8 @@ impl App {
                 .collect()
         };
         f.render_widget(
-            List::new(ord_items).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Orders (n/x)"),
-            ),
+            List::new(ord_items)
+                .block(Block::default().borders(Borders::ALL).title("Orders (n/x)")),
             chunks[1],
         );
     }

@@ -1,8 +1,6 @@
 use super::cache::QuoteCache;
 use super::cli_runner::CliRunner;
-use super::{
-    Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
-};
+use super::{Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -27,8 +25,8 @@ impl FcontextProvider {
     fn parse_quote_item(item: &Value) -> Option<Quote> {
         let symbol = item.get("symbol").and_then(Value::as_str)?;
         let price = parse_number(item.get("lastDone").or_else(|| item.get("last_done")))?;
-        let prev_close = parse_number(item.get("prevClose").or_else(|| item.get("prev_close")))
-            .unwrap_or(price);
+        let prev_close =
+            parse_number(item.get("prevClose").or_else(|| item.get("prev_close"))).unwrap_or(price);
         let change = price - prev_close;
         let change_pct = if prev_close.abs() > f64::EPSILON {
             (change / prev_close) * 100.0
@@ -191,14 +189,7 @@ impl MarketDataProvider for FcontextProvider {
         let json = self
             .runner
             .run_json(&[
-                "kline",
-                &sym,
-                "--period",
-                period,
-                "--count",
-                &count,
-                "--format",
-                "json",
+                "kline", &sym, "--period", period, "--count", &count, "--format", "json",
             ])
             .await?;
 

@@ -1,5 +1,5 @@
 use crate::engine::order::{Order, OrderSide};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -69,7 +69,10 @@ impl Account {
         match order.side {
             OrderSide::Buy => {
                 if notional > self.cash + f64::EPSILON {
-                    bail!("insufficient cash: need {notional:.2}, have {:.2}", self.cash);
+                    bail!(
+                        "insufficient cash: need {notional:.2}, have {:.2}",
+                        self.cash
+                    );
                 }
                 self.cash -= notional;
                 self.upsert_position(&order.symbol, order.filled_qty, order.avg_fill_price);

@@ -3,7 +3,7 @@ mod commands;
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::engine::TradingEngine;
-use crate::provider::{create_provider_stack, QuoteCache};
+use crate::provider::{QuoteCache, create_provider_stack};
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;

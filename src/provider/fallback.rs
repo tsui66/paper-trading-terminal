@@ -1,6 +1,6 @@
 use super::{
-    chain_exhausted_message, Candle, HistoryInterval, HistoryRange, MarketDataProvider,
-    ProviderError, Quote,
+    Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
+    chain_exhausted_message,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -12,11 +12,7 @@ pub struct FallbackProvider {
 
 impl FallbackProvider {
     pub fn new(chain: Vec<Arc<dyn MarketDataProvider>>) -> Self {
-        let label = chain
-            .iter()
-            .map(|p| p.name())
-            .collect::<Vec<_>>()
-            .join("→");
+        let label = chain.iter().map(|p| p.name()).collect::<Vec<_>>().join("→");
         Self { label, chain }
     }
 

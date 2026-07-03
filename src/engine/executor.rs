@@ -1,6 +1,6 @@
 use crate::config::TradingConfig;
 use crate::engine::order::{Order, OrderSide, OrderStatus, OrderType};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -20,10 +20,7 @@ impl MockExecutor {
     }
 
     pub fn restore_pending(&mut self, orders: Vec<Order>) {
-        self.pending_orders = orders
-            .into_iter()
-            .filter(|o| o.is_pending())
-            .collect();
+        self.pending_orders = orders.into_iter().filter(|o| o.is_pending()).collect();
     }
 
     pub fn pending_orders(&self) -> &[Order] {
@@ -155,7 +152,8 @@ mod tests {
     #[test]
     fn buy_limit_fills_when_price_at_or_below() {
         let mut ex = test_executor();
-        ex.submit_limit("AAPL", OrderSide::Buy, 10.0, 200.0).unwrap();
+        ex.submit_limit("AAPL", OrderSide::Buy, 10.0, 200.0)
+            .unwrap();
         let filled = ex.process_limit_fills("AAPL", 199.0, 0.0);
         assert_eq!(filled.len(), 1);
         assert!((filled[0].avg_fill_price - 200.0).abs() < f64::EPSILON);
@@ -165,7 +163,8 @@ mod tests {
     #[test]
     fn buy_limit_stays_pending_above_limit() {
         let mut ex = test_executor();
-        ex.submit_limit("AAPL", OrderSide::Buy, 10.0, 200.0).unwrap();
+        ex.submit_limit("AAPL", OrderSide::Buy, 10.0, 200.0)
+            .unwrap();
         let filled = ex.process_limit_fills("AAPL", 201.0, 0.0);
         assert!(filled.is_empty());
         assert_eq!(ex.pending_orders().len(), 1);
@@ -174,7 +173,9 @@ mod tests {
     #[test]
     fn cancel_removes_pending() {
         let mut ex = test_executor();
-        let order = ex.submit_limit("AAPL", OrderSide::Sell, 5.0, 250.0).unwrap();
+        let order = ex
+            .submit_limit("AAPL", OrderSide::Sell, 5.0, 250.0)
+            .unwrap();
         let id = order.id;
         let cancelled = ex.cancel_order(&id).unwrap();
         assert_eq!(cancelled.status, OrderStatus::Cancelled);
