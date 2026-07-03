@@ -5,8 +5,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use yfinance_rs::core::conversions::money_to_f64;
-use yfinance_rs::{Interval, Range, Ticker, YfClient};
+use yfinance_rs::{Interval, PriceAmount, QuantityAmount, Range, Ticker, YfClient};
 
 const YAHOO_MAX_ATTEMPTS: u32 = 3;
 
@@ -34,6 +33,18 @@ impl YahooProvider {
     async fn reset_client(&self) {
         let mut guard = self.client.lock().await;
         *guard = YfClient::default();
+    }
+
+    fn price_to_f64(price: &PriceAmount) -> f64 {
+        price.as_decimal().to_string().parse().unwrap_or(0.0)
+    }
+
+    fn quantity_to_u64(qty: &QuantityAmount) -> u64 {
+        qty.as_decimal()
+            .to_string()
+            .parse::<f64>()
+            .unwrap_or(0.0)
+            .round() as u64
     }
 
     async fn fetch_yahoo_quotes(
@@ -100,18 +111,26 @@ impl YahooProvider {
     }
 
     fn map_quote(symbol: &str, q: yfinance_rs::Quote) -> Quote {
-        let price = q.price.as_ref().map(money_to_f64).unwrap_or(0.0);
-        let prev = q.previous_close.as_ref().map(money_to_f64).unwrap_or(price);
+        let price = q.price.as_ref().map(Self::price_to_f64).unwrap_or(0.0);
+        let prev = q
+            .previous_close
+            .as_ref()
+            .map(Self::price_to_f64)
+            .unwrap_or(price);
         let change = price - prev;
         let change_pct = if prev.abs() > f64::EPSILON {
             (change / prev) * 100.0
         } else {
             0.0
         };
-        let volume = q.day_volume.unwrap_or(0);
-        let ts = Utc::now();
+        let volume = q
+            .day_volume
+            .as_ref()
+            .map(Self::quantity_to_u64)
+            .unwrap_or(0);
+        let ts = q.as_of.unwrap_or_else(Utc::now);
         let sym = {
-            let s = q.symbol.to_string();
+            let s = q.instrument.symbol.as_str();
             let upper = s.trim().to_uppercase();
             if upper.is_empty() {
                 symbol.to_uppercase()
@@ -241,11 +260,11 @@ impl MarketDataProvider for YahooProvider {
                         .iter()
                         .map(|bar| Candle {
                             symbol: sym.clone(),
-                            open: money_to_f64(&bar.open),
-                            high: money_to_f64(&bar.high),
-                            low: money_to_f64(&bar.low),
-                            close: money_to_f64(&bar.close),
-                            volume: bar.volume.unwrap_or(0),
+                            open: Self::price_to_f64(&bar.ohlc.open),
+                            high: Self::price_to_f64(&bar.ohlc.high),
+                            low: Self::price_to_f64(&bar.ohlc.low),
+                            close: Self::price_to_f64(&bar.ohlc.close),
+                            volume: bar.volume.as_ref().map(Self::quantity_to_u64).unwrap_or(0),
                             timestamp: bar.ts,
                             source: Some("yahoo".into()),
                         })
