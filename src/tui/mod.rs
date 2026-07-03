@@ -34,6 +34,7 @@ pub async fn run(config_path: Option<PathBuf>) -> Result<()> {
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
+        #[allow(clippy::collapsible_if)]
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 app.handle_key(key.code);

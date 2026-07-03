@@ -148,17 +148,19 @@ impl App {
             self.execute_order(req).await?;
         }
 
-        if let Some(idx) = self.cancel_order_idx.take() {
-            if let Some(order) = self.engine.pending_orders().get(idx) {
-                let id = order.id;
-                let sym = order.symbol.clone();
-                match self.engine.cancel_order(&id).await {
-                    Ok(o) => self.log_lines.push(format!(
-                        "Cancelled {sym} limit @ ${:.2}",
-                        o.limit_price.unwrap_or(0.0)
-                    )),
-                    Err(e) => self.log_lines.push(format!("Cancel failed: {e}")),
-                }
+        let cancel_target = self.cancel_order_idx.take().and_then(|idx| {
+            self.engine
+                .pending_orders()
+                .get(idx)
+                .map(|order| (order.id, order.symbol.clone()))
+        });
+        if let Some((id, sym)) = cancel_target {
+            match self.engine.cancel_order(&id).await {
+                Ok(o) => self.log_lines.push(format!(
+                    "Cancelled {sym} limit @ ${:.2}",
+                    o.limit_price.unwrap_or(0.0)
+                )),
+                Err(e) => self.log_lines.push(format!("Cancel failed: {e}")),
             }
         }
 
