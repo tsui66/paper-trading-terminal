@@ -1,5 +1,5 @@
-# Homebrew Cask template — copy to your tap (e.g. homebrew-tap/Casks/paper-trading-terminal.rb)
-# brew install --cask <your-org>/tap/paper-trading-terminal
+# Copy to https://github.com/tsui66/homebrew-tap/Casks/paper-trading-terminal.rb
+# Users install with: brew install --cask tsui66/tap/paper-trading-terminal
 #
 # Update version, urls, and sha256 values after each GitHub Release.
 

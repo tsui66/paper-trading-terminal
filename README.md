@@ -19,11 +19,23 @@
 
 ## Installation
 
-**Homebrew (macOS / Linux)** — requires a [Homebrew tap](.homebrew/Casks/paper-trading-terminal.rb) with release checksums:
+**Install script (macOS / Linux)** — recommended; no tap or build required:
 
 ```bash
-brew install --cask <your-org>/tap/paper-trading-terminal
+curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
 ```
+
+Installs `paper` to `/usr/local/bin` (macOS/Linux) or `%LOCALAPPDATA%\Programs\paper` (Windows).
+
+**Homebrew (macOS / Linux)** — after you publish a tap (see below):
+
+```bash
+brew install --cask tsui66/tap/paper-trading-terminal
+```
+
+`<org>` in `org/tap/...` is your **GitHub username or org** that owns the `homebrew-tap` repo. For this project that is **`tsui66`** → tap URL `https://github.com/tsui66/homebrew-tap`, install name `tsui66/tap/paper-trading-terminal`.
+
+One-time tap setup (maintainers): copy [`.homebrew/Casks/paper-trading-terminal.rb`](.homebrew/Casks/paper-trading-terminal.rb) into `homebrew-tap/Casks/`, update `version` and `sha256` per [GitHub Release](https://github.com/tsui66/paper-trading-terminal/releases), then users can run the command above.
 
 **Windows ([Scoop](https://scoop.sh))**
 
@@ -37,18 +49,10 @@ scoop install https://github.com/tsui66/paper-trading-terminal/raw/refs/heads/ma
 iwr https://github.com/tsui66/paper-trading-terminal/raw/main/install.ps1 | iex
 ```
 
-**Install script (macOS / Linux)**
-
-```bash
-curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
-```
-
-Installs `paper` to `/usr/local/bin` (macOS/Linux) or `%LOCALAPPDATA%\Programs\paper` (Windows).
-
 Override the GitHub repo for forks/self-hosted releases:
 
 ```bash
-PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL .../install | sh
+PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/tsui66/paper-trading-terminal/raw/main/install | sh
 ```
 
 ### Build from source
