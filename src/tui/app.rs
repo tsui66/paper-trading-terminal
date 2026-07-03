@@ -5,17 +5,15 @@ use crate::engine::market_rules;
 use crate::engine::order::OrderSide;
 use crate::provider::{MarketDataProvider, Quote, fetch_quotes_report, format_quote_failure_log};
 use crate::tui::kline::{AdjustType, KlineStore, KlineType};
-use crate::tui::ui::{layout::UiLayout, styles};
 use crate::tui::order_entry::{OrderEntry, OrderEntryAction, SubmitRequest};
+use crate::tui::ui::{layout::UiLayout, styles};
 use crate::tui::widgets::chart::{klines_to_cli, render_kline_chart};
 use crate::tui::widgets::orders;
 use crate::tui::widgets::positions;
 use crate::tui::widgets::watchlist;
-use uuid::Uuid;
 use crate::utils::terminal_bell;
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use std::future::Future;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -23,15 +21,16 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
 };
+use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
+use uuid::Uuid;
 
 /// Quote, kline, equity, and order-mark refresh cadence.
 const DATA_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 const ORDER_DISPLAY_LIMIT: usize = 24;
-const SHORTCUTS_HINT: &str =
-    "b buy | s sell | j/k watchlist | Tab period | ←/→ chart | n order | x cancel | z reset | r refresh | q quit";
+const SHORTCUTS_HINT: &str = "b buy | s sell | j/k watchlist | Tab period | ←/→ chart | n order | x cancel | z reset | r refresh | q quit";
 
 pub struct App {
     pub should_quit: bool,
@@ -65,10 +64,7 @@ impl App {
         let engine = TradingEngine::new(config.clone(), provider.clone(), db)?;
         let initial_cash = engine.account.cash;
         let chart_symbol = config.watchlist.symbols.first().cloned();
-        let mut log_lines = vec![
-            "Paper Trading Terminal".into(),
-            SHORTCUTS_HINT.into(),
-        ];
+        let mut log_lines = vec!["Paper Trading Terminal".into(), SHORTCUTS_HINT.into()];
         if engine.provider().name().contains("(disabled)") {
             log_lines.push(
                 "WARNING: Yahoo not in this binary — only partial fcontext quotes. \
@@ -302,12 +298,8 @@ impl App {
         }
 
         if let Some(sym) = self.chart_symbol.clone() {
-            self.kline_store.refresh_latest(
-                &sym,
-                self.kline_type,
-                AdjustType::ForwardAdjust,
-                64,
-            );
+            self.kline_store
+                .refresh_latest(&sym, self.kline_type, AdjustType::ForwardAdjust, 64);
         }
 
         match self.engine.process_pending_orders().await {
@@ -406,10 +398,7 @@ impl App {
         let should_log = self.refresh_log;
         self.refresh_log = false;
 
-        if let Some(Ok(batch)) = self
-            .wait_or_quit(key_rx, provider.quotes(&symbols))
-            .await
-        {
+        if let Some(Ok(batch)) = self.wait_or_quit(key_rx, provider.quotes(&symbols)).await {
             for q in batch {
                 self.merge_quote(q);
             }
@@ -433,10 +422,9 @@ impl App {
         if !missing.is_empty() {
             let provider = self.provider.clone();
             if let Some(report) = self
-                .wait_or_quit(
-                    key_rx,
-                    async move { fetch_quotes_report(provider.as_ref(), &missing).await },
-                )
+                .wait_or_quit(key_rx, async move {
+                    fetch_quotes_report(provider.as_ref(), &missing).await
+                })
                 .await
             {
                 for q in report.quotes {
@@ -633,7 +621,8 @@ impl App {
         } else if self.reset_confirm {
             format!(
                 "CONFIRM RESET — z again to restore ${:.0} & clear all | Esc cancel | {}",
-                self.engine.config().account.initial_cash, shortcuts
+                self.engine.config().account.initial_cash,
+                shortcuts
             )
         } else {
             shortcuts.to_string()
@@ -646,14 +635,12 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
         f.render_widget(
-            Paragraph::new(order_text)
-                .style(order_style)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(styles::border())
-                        .title("Order"),
-                ),
+            Paragraph::new(order_text).style(order_style).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(styles::border())
+                    .title("Order"),
+            ),
             chunks[3],
         );
     }
@@ -763,10 +750,7 @@ impl App {
             } else {
                 "Loading..."
             };
-            f.render_widget(
-                Paragraph::new(msg).alignment(Alignment::Center),
-                chart_area,
-            );
+            f.render_widget(Paragraph::new(msg).alignment(Alignment::Center), chart_area);
             return;
         }
 

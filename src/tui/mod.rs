@@ -61,18 +61,16 @@ fn spawn_key_listener() -> (UnboundedSender<KeyCode>, UnboundedReceiver<KeyCode>
     std::thread::spawn(move || {
         loop {
             match event::poll(Duration::from_millis(50)) {
-                Ok(true) => {
-                    match event::read() {
-                        Ok(Event::Key(key)) => {
-                            if listener_tx.send(key.code).is_err() {
-                                break;
-                            }
+                Ok(true) => match event::read() {
+                    Ok(Event::Key(key)) => {
+                        if listener_tx.send(key.code).is_err() {
+                            break;
                         }
-                        Ok(Event::Resize(_, _)) => {}
-                        Ok(_) => {}
-                        Err(_) => break,
                     }
-                }
+                    Ok(Event::Resize(_, _)) => {}
+                    Ok(_) => {}
+                    Err(_) => break,
+                },
                 Ok(false) => {}
                 Err(_) => break,
             }

@@ -2,7 +2,6 @@ use crate::engine::account::Position;
 use crate::provider::Quote;
 use crate::tui::ui::{styles, text};
 
-
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Margin, Rect},
@@ -155,8 +154,11 @@ fn holdings_table(rows: &[PositionView], layout: ColumnLayout) -> Table<'static>
         header_cells.push(Cell::from("P/L").style(styles::header()));
     }
     header_cells.push(
-        Cell::from(text::align_right("P/L%", layout.widths[layout.widths.len() - 1]))
-            .style(styles::header()),
+        Cell::from(text::align_right(
+            "P/L%",
+            layout.widths[layout.widths.len() - 1],
+        ))
+        .style(styles::header()),
     );
     let header = Row::new(header_cells);
 
@@ -212,11 +214,7 @@ fn holdings_table(rows: &[PositionView], layout: ColumnLayout) -> Table<'static>
 /// Holdings table — column layout aligned with longbridge-terminal portfolio holdings.
 pub fn render(frame: &mut Frame, area: Rect, positions: &[Position], quotes: &[Quote]) {
     let layout = column_layout(area.width);
-    let name_width = layout
-        .widths
-        .get(1)
-        .copied()
-        .unwrap_or(8);
+    let name_width = layout.widths.get(1).copied().unwrap_or(8);
     let rows = build_position_views(positions, quotes, name_width);
 
     let block = Block::default()
@@ -238,9 +236,12 @@ pub fn render(frame: &mut Frame, area: Rect, positions: &[Position], quotes: &[Q
 
     if rows.is_empty() {
         frame.render_widget(
-            Paragraph::new(Span::styled("No holdings", Style::default().fg(Color::Gray)))
-                .alignment(Alignment::Center)
-                .block(Block::default().borders(Borders::NONE)),
+            Paragraph::new(Span::styled(
+                "No holdings",
+                Style::default().fg(Color::Gray),
+            ))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE)),
             table_area,
         );
         return;

@@ -68,9 +68,7 @@ fn symbol_code(symbol: &str) -> &str {
 }
 
 fn find_quote<'a>(quotes: &'a [Quote], sym: &str) -> Option<&'a Quote> {
-    quotes
-        .iter()
-        .find(|q| q.symbol.eq_ignore_ascii_case(sym))
+    quotes.iter().find(|q| q.symbol.eq_ignore_ascii_case(sym))
 }
 
 fn watch_table(
@@ -96,8 +94,11 @@ fn watch_table(
     if layout.show_vol {
         let vol_w = layout.widths.get(4).copied().unwrap_or(5);
         header_cells.push(
-            Cell::from(text::align_right(if ui.compact { "V" } else { "VOL" }, vol_w))
-                .style(styles::header()),
+            Cell::from(text::align_right(
+                if ui.compact { "V" } else { "VOL" },
+                vol_w,
+            ))
+            .style(styles::header()),
         );
     }
     let header = Row::new(header_cells);
@@ -177,11 +178,7 @@ pub fn render(
     let background = Block::default()
         .borders(Borders::ALL)
         .border_style(styles::border())
-        .title(if ui.compact {
-            " WL "
-        } else {
-            " Watchlist "
-        })
+        .title(if ui.compact { " WL " } else { " Watchlist " })
         .title_bottom(
             Line::from(vec![
                 Span::styled(" b ", styles::dark_gray()),

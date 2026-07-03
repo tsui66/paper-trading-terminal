@@ -121,12 +121,7 @@ impl MockExecutor {
                     OrderSide::Buy => market_price.min(limit),
                     OrderSide::Sell => market_price.max(limit),
                 };
-                Self::apply_fill(
-                    &mut order,
-                    qty,
-                    fill_price,
-                    commission.max(self.commission),
-                );
+                Self::apply_fill(&mut order, qty, fill_price, commission.max(self.commission));
                 filled.push(order);
             } else {
                 remaining.push(order);

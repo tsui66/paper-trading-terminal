@@ -47,11 +47,7 @@ pub struct PriceBand {
 
 pub fn prev_close(quote: &Quote) -> f64 {
     let prev = quote.price - quote.change;
-    if prev > 0.0 {
-        prev
-    } else {
-        quote.price
-    }
+    if prev > 0.0 { prev } else { quote.price }
 }
 
 pub fn price_band(quote: &Quote) -> Option<PriceBand> {
@@ -72,7 +68,11 @@ pub fn price_band(quote: &Quote) -> Option<PriceBand> {
 }
 
 fn cn_limit_pct(quote: &Quote) -> f64 {
-    let name = quote.name.as_deref().unwrap_or_default().to_ascii_uppercase();
+    let name = quote
+        .name
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
     let sym = quote.symbol.to_ascii_uppercase();
     if name.contains("ST") || sym.contains("ST") {
         0.05
@@ -98,9 +98,7 @@ pub fn validate_quantity(symbol: &str, qty: f64) -> Result<()> {
     let sym = symbol.to_uppercase();
     if lot > 1.0 {
         if (qty % lot).abs() > f64::EPSILON {
-            bail!(
-                "{sym}: quantity must be a multiple of {lot:.0} (board lot)"
-            );
+            bail!("{sym}: quantity must be a multiple of {lot:.0} (board lot)");
         }
     } else if (qty.fract()).abs() > f64::EPSILON {
         bail!("{sym}: US equities require whole-share quantity");
@@ -192,7 +190,11 @@ pub fn format_trade_fees(fees: TradeFees) -> String {
     if fees.regulatory <= f64::EPSILON {
         format!("fee ${:.2}", fees.total())
     } else if fees.platform <= f64::EPSILON {
-        format!("fee ${:.2} (regulatory ${:.2})", fees.total(), fees.regulatory)
+        format!(
+            "fee ${:.2} (regulatory ${:.2})",
+            fees.total(),
+            fees.regulatory
+        )
     } else {
         format!(
             "fee ${:.2} (broker ${:.2} + regulatory ${:.2})",
@@ -253,11 +255,7 @@ fn hk_regulatory_fees(notional: f64) -> f64 {
 /// A-share stamp (sell) + transfer fee (both sides).
 fn cn_regulatory_fees(side: OrderSide, notional: f64) -> f64 {
     const TRANSFER: f64 = 0.00001;
-    let stamp = if side == OrderSide::Sell {
-        0.0005
-    } else {
-        0.0
-    };
+    let stamp = if side == OrderSide::Sell { 0.0005 } else { 0.0 };
     notional * (TRANSFER + stamp)
 }
 
@@ -288,11 +286,7 @@ pub fn reserved_sell_qty(symbol: &str, pending: &[Order]) -> f64 {
     let sym = symbol.to_uppercase();
     pending
         .iter()
-        .filter(|o| {
-            o.is_pending()
-                && o.side == OrderSide::Sell
-                && o.symbol.to_uppercase() == sym
-        })
+        .filter(|o| o.is_pending() && o.side == OrderSide::Sell && o.symbol.to_uppercase() == sym)
         .map(|o| o.qty)
         .sum()
 }
@@ -388,7 +382,13 @@ mod tests {
 
     #[test]
     fn cn_sell_stamp_and_transfer() {
-        let fees = compute_trade_fees("600519.SH", OrderSide::Sell, 100.0, 100.0, &trading_config());
+        let fees = compute_trade_fees(
+            "600519.SH",
+            OrderSide::Sell,
+            100.0,
+            100.0,
+            &trading_config(),
+        );
         assert!((fees.regulatory - 5.1).abs() < 0.01);
     }
 }

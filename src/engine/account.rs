@@ -162,7 +162,8 @@ mod tests {
     #[test]
     fn cn_buy_locks_shares_until_unlock() {
         let mut acct = Account::new(1_000_000.0, "CNY");
-        acct.apply_fill(&filled_buy("600519.SH", 100.0, 100.0)).unwrap();
+        acct.apply_fill(&filled_buy("600519.SH", 100.0, 100.0))
+            .unwrap();
         let pos = acct.positions.first().unwrap();
         assert_eq!(pos.quantity, 100.0);
         assert_eq!(pos.locked_qty, 100.0);

@@ -21,8 +21,30 @@ impl UiLayout {
         let tiny = width < 86 || height < 22;
 
         let min_chart = if tiny { 16 } else { 22 };
-        let mut watchlist_w = pct(width, if compact { 30 } else { 34 }, if tiny { 26 } else if compact { 32 } else { 44 }, if compact { 50 } else { 62 });
-        let mut sidebar_w = pct(width, if compact { 26 } else { 28 }, if tiny { 22 } else if compact { 28 } else { 38 }, if compact { 44 } else { 52 });
+        let mut watchlist_w = pct(
+            width,
+            if compact { 30 } else { 34 },
+            if tiny {
+                26
+            } else if compact {
+                32
+            } else {
+                44
+            },
+            if compact { 50 } else { 62 },
+        );
+        let mut sidebar_w = pct(
+            width,
+            if compact { 26 } else { 28 },
+            if tiny {
+                22
+            } else if compact {
+                28
+            } else {
+                38
+            },
+            if compact { 44 } else { 52 },
+        );
 
         while watchlist_w + sidebar_w + min_chart > width.saturating_sub(2) {
             if sidebar_w > watchlist_w && sidebar_w > 22 {
@@ -39,7 +61,13 @@ impl UiLayout {
             watchlist_w,
             sidebar_w,
             header_h: if compact { 2 } else { 3 },
-            log_h: if tiny { 3 } else if compact { 4 } else { 5 },
+            log_h: if tiny {
+                3
+            } else if compact {
+                4
+            } else {
+                5
+            },
             footer_h: if compact { 2 } else { 3 },
             chart_y_axis_w: if compact { 8 } else { 10 },
             block_margin_v: if compact { 1 } else { 2 },
@@ -103,6 +131,16 @@ mod tests {
         let ui = UiLayout::from_area(90, 24);
         assert!(ui.compact);
         assert!(ui.watchlist_w + ui.sidebar_w + 16 <= 90);
+    }
+
+    #[test]
+    fn shortcuts_hint_differs_by_compact_mode() {
+        let full = UiLayout::from_area(160, 48);
+        let compact = UiLayout::from_area(90, 24);
+        assert!(!full.compact);
+        assert!(compact.compact);
+        assert!(full.shortcuts_hint().contains("buy"));
+        assert!(compact.shortcuts_hint().contains("b s"));
     }
 
     #[test]

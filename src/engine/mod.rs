@@ -65,13 +65,8 @@ impl TradingEngine {
 
         let fill_price =
             crate::utils::apply_slippage(quote.price, side, self.config.trading.slippage_bps);
-        let fees = market_rules::compute_trade_fees(
-            symbol,
-            side,
-            qty,
-            fill_price,
-            &self.config.trading,
-        );
+        let fees =
+            market_rules::compute_trade_fees(symbol, side, qty, fill_price, &self.config.trading);
 
         let mut order = self
             .executor
@@ -137,18 +132,12 @@ impl TradingEngine {
                 continue;
             }
 
-            let filled = self
-                .executor
-                .process_limit_fills(&symbol, quote.price, 0.0);
+            let filled = self.executor.process_limit_fills(&symbol, quote.price, 0.0);
 
             for mut order in filled {
-                if let Err(e) = self.validate_order(
-                    &quote,
-                    order.side,
-                    order.qty,
-                    order.limit_price,
-                    false,
-                ) {
+                if let Err(e) =
+                    self.validate_order(&quote, order.side, order.qty, order.limit_price, false)
+                {
                     tracing::warn!(id = %order.id, error = %e, "skip fill: validation failed");
                     order.status = order::OrderStatus::Pending;
                     order.filled_qty = 0.0;
@@ -194,8 +183,7 @@ impl TradingEngine {
     pub fn reset_account(&mut self) -> Result<f64> {
         let cash = self.config.account.initial_cash;
         let currency = self.config.account.currency.clone();
-        self.db
-            .reset_account(&self.account.id, cash, &currency)?;
+        self.db.reset_account(&self.account.id, cash, &currency)?;
         self.account.cash = cash;
         self.account.currency = currency;
         self.account.positions.clear();
@@ -297,10 +285,8 @@ impl TradingEngine {
             &self.config.trading,
         );
         let required = qty * worst_price + fees.total();
-        let reserved = market_rules::reserved_buy_cash(
-            self.executor.pending_orders(),
-            &self.config.trading,
-        );
+        let reserved =
+            market_rules::reserved_buy_cash(self.executor.pending_orders(), &self.config.trading);
         let available = self.account.cash - reserved;
         if required > available + f64::EPSILON {
             anyhow::bail!(
@@ -349,12 +335,15 @@ mod recent_orders_tests {
             .executor
             .submit_limit("AAPL", OrderSide::Buy, 1.0, 1.0)
             .unwrap();
-        engine.account.positions.push(crate::engine::account::Position {
-            symbol: "AAPL".into(),
-            quantity: 5.0,
-            locked_qty: 0.0,
-            avg_cost: 100.0,
-        });
+        engine
+            .account
+            .positions
+            .push(crate::engine::account::Position {
+                symbol: "AAPL".into(),
+                quantity: 5.0,
+                locked_qty: 0.0,
+                avg_cost: 100.0,
+            });
         let cash = engine.reset_account().unwrap();
         assert!((cash - config.account.initial_cash).abs() < f64::EPSILON);
         assert!(engine.account.positions.is_empty());
@@ -372,7 +361,10 @@ mod recent_orders_tests {
             .submit_limit("AAPL", OrderSide::Buy, 1.0, 100.0)
             .unwrap();
         let pending_id = engine.pending_orders()[0].id;
-        let mut filled = engine.executor.fill_market("MSFT", OrderSide::Sell, 1.0, 50.0, 0.0).unwrap();
+        let mut filled = engine
+            .executor
+            .fill_market("MSFT", OrderSide::Sell, 1.0, 50.0, 0.0)
+            .unwrap();
         filled.status = OrderStatus::Filled;
         engine.db.upsert_order(&engine.account.id, &filled).unwrap();
 

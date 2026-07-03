@@ -74,11 +74,7 @@ pub struct Quote {
 
 impl Quote {
     pub fn merge_metadata_from(&mut self, other: &Quote) {
-        if self
-            .name
-            .as_ref()
-            .is_none_or(|name| name.trim().is_empty())
-        {
+        if self.name.as_ref().is_none_or(|name| name.trim().is_empty()) {
             self.name = other.name.clone();
         }
         if self

@@ -77,10 +77,7 @@ impl FcontextProvider {
 
     fn parse_static_names(value: &Value) -> HashMap<String, String> {
         let mut out = HashMap::new();
-        for item in extract_array(
-            value,
-            &["static", "statics", "data", "items", "result"],
-        ) {
+        for item in extract_array(value, &["static", "statics", "data", "items", "result"]) {
             let Some(symbol) = item
                 .get("symbol")
                 .and_then(Value::as_str)
@@ -130,7 +127,10 @@ impl FcontextProvider {
         };
         let names = Self::parse_static_names(&json);
         for quote in quotes {
-            if quote.name.as_ref().is_none_or(|name| name.trim().is_empty())
+            if quote
+                .name
+                .as_ref()
+                .is_none_or(|name| name.trim().is_empty())
                 && let Some(name) = names.get(&quote.symbol)
             {
                 quote.name = Some(name.clone());
@@ -449,7 +449,10 @@ mod tests {
         });
         let names = FcontextProvider::parse_static_names(&raw);
         assert_eq!(names.get("AAPL"), Some(&"Apple Inc.".to_string()));
-        assert_eq!(names.get("MSFT"), Some(&"Microsoft Corporation".to_string()));
+        assert_eq!(
+            names.get("MSFT"),
+            Some(&"Microsoft Corporation".to_string())
+        );
     }
 
     #[test]

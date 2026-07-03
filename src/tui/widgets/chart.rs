@@ -12,10 +12,7 @@ pub fn klines_to_cli(klines: &[Kline]) -> Vec<CliCandle> {
     klines
         .iter()
         .filter_map(|sample| {
-            if sample.open <= 0.0
-                || sample.high <= 0.0
-                || sample.low <= 0.0
-                || sample.close <= 0.0
+            if sample.open <= 0.0 || sample.high <= 0.0 || sample.low <= 0.0 || sample.close <= 0.0
             {
                 return None;
             }

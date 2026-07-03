@@ -271,6 +271,9 @@ mod tests {
             parse_session(Some("POSTPOST")),
             Some(TradingSession::AfterHours)
         );
-        assert_eq!(parse_session(Some("Suspended")), Some(TradingSession::Suspended));
+        assert_eq!(
+            parse_session(Some("Suspended")),
+            Some(TradingSession::Suspended)
+        );
     }
 }

@@ -69,9 +69,7 @@ impl Database {
     }
 
     fn migrate_positions_locked_qty(&self) -> Result<()> {
-        let mut stmt = self
-            .conn
-            .prepare("PRAGMA table_info(positions)")?;
+        let mut stmt = self.conn.prepare("PRAGMA table_info(positions)")?;
         let columns: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))?
             .filter_map(|r| r.ok())
@@ -114,9 +112,9 @@ impl Database {
     }
 
     fn load_positions(&self, account_id: &Uuid) -> Result<Vec<Position>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT symbol, quantity, locked_qty, avg_cost FROM positions WHERE account_id = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT symbol, quantity, locked_qty, avg_cost FROM positions WHERE account_id = ?1",
+        )?;
         let rows = stmt.query_map(params![account_id.to_string()], |row| {
             Ok(Position {
                 symbol: row.get(0)?,
@@ -234,14 +232,10 @@ impl Database {
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         let id = account_id.to_string();
-        self.conn.execute(
-            "DELETE FROM orders WHERE account_id = ?1",
-            params![id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM positions WHERE account_id = ?1",
-            params![id],
-        )?;
+        self.conn
+            .execute("DELETE FROM orders WHERE account_id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM positions WHERE account_id = ?1", params![id])?;
         self.conn.execute(
             r#"
             UPDATE accounts
@@ -278,8 +272,12 @@ mod tests {
         acct.cash = 50_000.0;
         db.persist_account(&acct).unwrap();
 
-        db.reset_account(&account.id, config.account.initial_cash, &config.account.currency)
-            .unwrap();
+        db.reset_account(
+            &account.id,
+            config.account.initial_cash,
+            &config.account.currency,
+        )
+        .unwrap();
 
         let reloaded = db.load_or_create_account(&config).unwrap();
         assert!((reloaded.cash - config.account.initial_cash).abs() < f64::EPSILON);

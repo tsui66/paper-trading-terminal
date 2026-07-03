@@ -105,13 +105,8 @@ fn fee_label(order: &Order, trading: &TradingConfig) -> String {
     if price <= 0.0 && order.order_type == OrderType::Market {
         return "~".to_string();
     }
-    let fees = market_rules::compute_trade_fees(
-        &order.symbol,
-        order.side,
-        order.qty,
-        price,
-        trading,
-    );
+    let fees =
+        market_rules::compute_trade_fees(&order.symbol, order.side, order.qty, price, trading);
     format!("~{:.2}", fees.total())
 }
 
@@ -178,7 +173,8 @@ fn orders_table(orders: &[Order], layout: ColumnLayout, trading: &TradingConfig)
             let fee = fee_label(order, trading);
             let mut cells = vec![
                 Cell::from(symbol_code(&order.symbol).to_string()),
-                Cell::from(format!("{:?}", order.side).to_uppercase()).style(side_style(order.side)),
+                Cell::from(format!("{:?}", order.side).to_uppercase())
+                    .style(side_style(order.side)),
                 Cell::from(type_label(order.order_type)),
                 Cell::from(format!("{:.0}", order.qty)),
                 Cell::from(price),

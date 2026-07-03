@@ -53,7 +53,6 @@ impl Kline {
             total: 0,
         }
     }
-
 }
 
 /// K-line period — mirrors longbridge-terminal `data::KlineType`.
@@ -192,13 +191,7 @@ impl KlineStore {
         let store = self.inner.read().expect("kline store poisoned");
         let Some((has_more, entries)) = store.get(&cache_key) else {
             drop(store);
-            self.spawn_request(
-                symbol,
-                kline_type,
-                adjust_type,
-                0,
-                (page + 1) * page_size,
-            );
+            self.spawn_request(symbol, kline_type, adjust_type, 0, (page + 1) * page_size);
             return Klines::default();
         };
 
@@ -325,7 +318,9 @@ impl KlineStore {
         let store = self.clone();
         let symbol = symbol.to_string();
         tokio::spawn(async move {
-            store.request(symbol, kline_type, adjust_type, before, count).await;
+            store
+                .request(symbol, kline_type, adjust_type, before, count)
+                .await;
             store
                 .inflight
                 .write()
