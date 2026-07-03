@@ -81,6 +81,21 @@ pub enum Commands {
     Tui(TuiArgs),
     /// Print agent JSON schema
     Schema,
+    /// Download and install the latest paper CLI from GitHub Releases
+    Upgrade(UpgradeArgs),
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct UpgradeArgs {
+    /// Check for updates only; do not install
+    #[arg(long)]
+    pub check: bool,
+    /// Install a specific release tag (e.g. v0.0.2 or 0.0.2)
+    #[arg(long)]
+    pub version: Option<String>,
+    /// GitHub owner/repo (default: tsui66/paper-trading-terminal)
+    #[arg(long, env = "PAPER_INSTALL_REPO")]
+    pub repo: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -149,7 +164,7 @@ pub async fn execute(cli: &Cli, engine: &mut TradingEngine) -> Result<()> {
         Commands::History => cmd_history(cli, engine).await,
         Commands::Pnl => cmd_pnl(cli, engine).await,
         Commands::Config { action } => cmd_config(cli, engine, action.as_ref()).await,
-        Commands::Tui(_) | Commands::Schema => {
+        Commands::Tui(_) | Commands::Schema | Commands::Upgrade(_) => {
             unreachable!("handled in cli::run")
         }
     }

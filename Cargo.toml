@@ -26,6 +26,11 @@ yahoo = ["dep:yfinance-rs"]
 ansi-parser = "0.9.1"
 async-trait = "0.1"
 anyhow = "1.0"
+flate2 = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+tar = "0.4"
+tempfile = "3.14"
+zip = "2"
 cli-candlestick-chart = { path = "crates/cli-candlestick-chart", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive", "env"] }
@@ -43,9 +48,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 unicode-width = "0.2"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 yfinance-rs = { version = "0.9.0", optional = true, features = ["stream"] }
-
-[dev-dependencies]
-tempfile = "3.14"
 
 [profile.release]
 opt-level = 3

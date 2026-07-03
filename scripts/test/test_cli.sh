@@ -118,11 +118,18 @@ OUT=$($PAPER --db "$DB" cancel "${SELL_ID:0:8}" --json)
 assert_contains '"status": "cancelled"' "$OUT" "limit_sell.cancel"
 echo "$OUT"
 
+echo "== upgrade --check =="
+OUT=$($PAPER upgrade --check --json)
+assert_contains '"current"' "$OUT" "upgrade.current"
+assert_contains '"latest"' "$OUT" "upgrade.latest"
+assert_contains '"update_available"' "$OUT" "upgrade.update_available"
+
 echo "== schema =="
 OUT=$($PAPER schema --json)
 assert_contains '"cli_binary": "paper"' "$OUT" "schema.binary"
 assert_contains '"buy"' "$OUT" "schema.buy"
 assert_contains '"sell"' "$OUT" "schema.sell"
+assert_contains '"upgrade"' "$OUT" "schema.upgrade"
 echo "$OUT" | head -12
 
 echo "== config show =="

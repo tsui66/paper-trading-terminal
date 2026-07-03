@@ -116,6 +116,16 @@ PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/
 
 </details>
 
+### Upgrade
+
+```bash
+paper upgrade --check          # compare with latest GitHub release
+paper upgrade                  # download and replace current binary
+paper upgrade --version v0.0.2 # install a specific version
+```
+
+Uses [GitHub Releases](https://github.com/tsui66/paper-trading-terminal/releases). Override repo with `PAPER_INSTALL_REPO=owner/name` or `--repo`.
+
 ### Step 2 — Verify `paper`
 
 ```bash
@@ -318,6 +328,9 @@ Limit fills ring the terminal bell and log `*** FILLED ***` with fee breakdown.
 | `config set-fallback a,b` | Comma-separated fallback list |
 | `config provider-status` | Probe each provider + chain |
 | `schema` | Agent integration schema (JSON) |
+| `upgrade` | Download latest release and replace the `paper` binary |
+| `upgrade --check` | Check if a newer release is available |
+| `upgrade --version v0.0.2` | Install a specific release tag |
 | `tui` | Launch dashboard |
 
 **Ranges:** `d1` `d5` `m1` `m3` `m6` `y1` `y5`  

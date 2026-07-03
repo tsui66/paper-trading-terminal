@@ -116,6 +116,16 @@ PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/
 
 </details>
 
+### 업그레이드
+
+```bash
+paper upgrade --check          # GitHub 최신 릴리스와 비교
+paper upgrade                  # 현재 바이너리 다운로드 후 교체
+paper upgrade --version v0.0.2 # 특정 버전 설치
+```
+
+[GitHub Releases](https://github.com/tsui66/paper-trading-terminal/releases) 사용. `PAPER_INSTALL_REPO=owner/name` 또는 `--repo`로 저장소 재정의 가능.
+
 ### 2단계 — `paper` 검증
 
 ```bash
@@ -318,6 +328,9 @@ paper tui
 | `config set-fallback a,b` | 쉼표 구분 폴백 목록 |
 | `config provider-status` | 제공자·체인 프로브 |
 | `schema` | 에이전트 통합 schema（JSON） |
+| `upgrade` | 최신 릴리스 다운로드 후 `paper` 바이너리 교체 |
+| `upgrade --check` | 새 버전 사용 가능 여부 확인 |
+| `upgrade --version v0.0.2` | 특정 릴리스 태그 설치 |
 | `tui` | 대시보드 실행 |
 
 **범위：** `d1` `d5` `m1` `m3` `m6` `y1` `y5`  

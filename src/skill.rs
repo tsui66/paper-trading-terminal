@@ -24,7 +24,7 @@ pub fn agent_schema() -> Value {
         "cli_binary": "paper",
         "cli_commands": [
             "account", "portfolio", "positions", "quote", "historical",
-            "buy", "sell", "orders", "cancel", "history", "pnl", "config", "tui", "schema"
+            "buy", "sell", "orders", "cancel", "history", "pnl", "config", "upgrade", "tui", "schema"
         ],
         "cli_global_flags": ["--json", "--config", "--db"],
         "order_types": ["market", "limit"],

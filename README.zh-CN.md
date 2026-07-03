@@ -116,6 +116,16 @@ PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/
 
 </details>
 
+### 升级
+
+```bash
+paper upgrade --check          # 与 GitHub 最新 release 对比
+paper upgrade                  # 下载并替换当前二进制
+paper upgrade --version v0.0.2 # 安装指定版本
+```
+
+使用 [GitHub Releases](https://github.com/tsui66/paper-trading-terminal/releases)。可用 `PAPER_INSTALL_REPO=owner/name` 或 `--repo` 覆盖仓库。
+
 ### 步骤 2 — 验证 `paper`
 
 ```bash
@@ -318,6 +328,9 @@ paper tui
 | `config set-fallback a,b` | 逗号分隔备用列表 |
 | `config provider-status` | 探测各数据源与链路 |
 | `schema` | Agent 集成 schema（JSON） |
+| `upgrade` | 下载最新 release 并替换 `paper` 二进制 |
+| `upgrade --check` | 检查是否有新版本 |
+| `upgrade --version v0.0.2` | 安装指定 release 标签 |
 | `tui` | 启动仪表盘 |
 
 **区间：** `d1` `d5` `m1` `m3` `m6` `y1` `y5`  

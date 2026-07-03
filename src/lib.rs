@@ -5,6 +5,7 @@ pub mod engine;
 pub mod provider;
 pub mod skill;
 pub mod tui;
+pub mod upgrade;
 pub mod utils;
 
 pub use config::AppConfig;

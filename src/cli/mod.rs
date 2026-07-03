@@ -4,16 +4,24 @@ use crate::config::AppConfig;
 use crate::db::Database;
 use crate::engine::TradingEngine;
 use crate::provider::{QuoteCache, create_provider_stack};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use commands::Cli;
+pub use commands::{Cli, UpgradeArgs};
 
 pub async fn run(cli: Cli) -> Result<()> {
     if let commands::Commands::Schema = &cli.command {
         commands::cmd_schema(&cli);
         return Ok(());
+    }
+
+    if let commands::Commands::Upgrade(args) = &cli.command {
+        let json = cli.json;
+        let args = args.clone();
+        return tokio::task::spawn_blocking(move || crate::upgrade::cmd_upgrade(json, &args))
+            .await
+            .context("upgrade task")?;
     }
 
     if let commands::Commands::Tui(_) = &cli.command {

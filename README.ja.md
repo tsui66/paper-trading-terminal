@@ -116,6 +116,16 @@ PAPER_INSTALL_REPO=your-org/paper-trading-terminal curl -sSL https://github.com/
 
 </details>
 
+### アップグレード
+
+```bash
+paper upgrade --check          # GitHub 最新リリースと比較
+paper upgrade                  # 現在のバイナリをダウンロードして置換
+paper upgrade --version v0.0.2 # 指定バージョンをインストール
+```
+
+[GitHub Releases](https://github.com/tsui66/paper-trading-terminal/releases) を使用。`PAPER_INSTALL_REPO=owner/name` または `--repo` でリポジトリを上書き可能。
+
 ### ステップ 2 — `paper` の検証
 
 ```bash
@@ -318,6 +328,9 @@ paper tui
 | `config set-fallback a,b` | カンマ区切りフォールバック |
 | `config provider-status` | 各プロバイダとチェーンをプローブ |
 | `schema` | エージェント統合 schema（JSON） |
+| `upgrade` | 最新リリースをダウンロードして `paper` バイナリを置換 |
+| `upgrade --check` | 新しいリリースがあるか確認 |
+| `upgrade --version v0.0.2` | 指定タグのリリースをインストール |
 | `tui` | ダッシュボード起動 |
 
 **レンジ：** `d1` `d5` `m1` `m3` `m6` `y1` `y5`  
