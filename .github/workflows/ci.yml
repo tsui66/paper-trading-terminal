@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: CI (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +27,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ubuntu-ci-${{ hashFiles('**/Cargo.lock') }}
+          key: ci-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: CI checks
-        run: make ci
+        shell: bash
+        run: ./scripts/ci.sh

@@ -8,7 +8,8 @@ lint:
 	cargo fmt --check
 	cargo clippy -- -D warnings
 
-ci: lint test
+ci:
+	./scripts/ci.sh
 
 build:
 	cargo build --release

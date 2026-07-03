@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/binary.sh
+source "$ROOT/scripts/lib/binary.sh"
 
 if ! command -v fcontext >/dev/null 2>&1; then
   echo "SKIP: fcontext CLI not installed"
@@ -10,7 +12,7 @@ if ! command -v fcontext >/dev/null 2>&1; then
 fi
 
 cargo build --quiet
-PAPER="./target/debug/paper"
+PAPER="$(resolve_paper_bin debug)"
 DB="data/test_fcontext.db"
 rm -f "$DB"
 

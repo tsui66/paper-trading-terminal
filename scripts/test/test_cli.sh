@@ -3,13 +3,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/binary.sh
+source "$ROOT/scripts/lib/binary.sh"
 
 DB="data/test_cli.db"
 CFG="data/test_mock_config.toml"
 rm -f "$DB"
 
 cargo build --quiet
-PAPER_BIN="./target/debug/paper"
+PAPER_BIN="$(resolve_paper_bin debug)"
 PAPER="$PAPER_BIN --config $CFG"
 
 assert_contains() {
