@@ -48,6 +48,17 @@ impl App {
         let engine = TradingEngine::new(config.clone(), provider.clone(), db)?;
         let initial_cash = engine.account.cash;
         let chart_symbol = config.watchlist.symbols.first().cloned();
+        let mut log_lines = vec![
+            "Paper Trading Terminal".into(),
+            "j/k:watchlist b:buy s:sell m:market/limit x:cancel r:refresh q:quit".into(),
+        ];
+        if engine.provider().name().contains("(disabled)") {
+            log_lines.push(
+                "WARNING: Yahoo not in this binary — only partial fcontext quotes. \
+                 Rebuild: cargo build --release"
+                    .into(),
+            );
+        }
         Ok(Self {
             should_quit: false,
             config,
@@ -59,10 +70,7 @@ impl App {
             watchlist_idx: 0,
             orders_idx: 0,
             equity: initial_cash,
-            log_lines: vec![
-                "Paper Trading Terminal".into(),
-                "j/k:watchlist b:buy s:sell m:market/limit x:cancel r:refresh q:quit".into(),
-            ],
+            log_lines,
             refresh_pending: true,
             chart_pending: true,
             cancel_order_idx: None,
@@ -264,6 +272,24 @@ impl App {
                     symbols.len(),
                     chrono::Utc::now().format("%H:%M:%S")
                 ));
+                if fetched < symbols.len() {
+                    let missing: Vec<&str> = symbols
+                        .iter()
+                        .filter(|sym| {
+                            !self
+                                .quotes
+                                .iter()
+                                .any(|q| q.symbol.eq_ignore_ascii_case(sym))
+                        })
+                        .map(String::as_str)
+                        .collect();
+                    if !missing.is_empty() {
+                        self.log_lines.push(format!(
+                            "Missing quotes: {} (run: paper config provider-status)",
+                            missing.join(", ")
+                        ));
+                    }
+                }
             }
             Err(e) => self.log_lines.push(format!("Quote error: {e}")),
         }

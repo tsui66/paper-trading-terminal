@@ -47,6 +47,16 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Verify Yahoo provider is compiled
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bin=target/${{ matrix.target }}/release/paper
+          out=$("$bin" config provider-status --json 2>&1)
+          echo "$out"
+          echo "$out" | grep -q '"provider": "yahoo"' || { echo "missing yahoo in provider-status"; exit 1; }
+          echo "$out" | grep -q '"status": "ok"' || { echo "yahoo provider not ok in release binary"; exit 1; }
+
       - name: Package tarball
         if: matrix.ext == 'tar'
         run: |

@@ -2,6 +2,7 @@ use super::{
     Candle, HistoryInterval, HistoryRange, MarketDataProvider, ProviderError, Quote,
     chain_exhausted_message,
 };
+use crate::utils::normalize_symbol;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,7 +67,9 @@ impl FallbackProvider {
             if q.source.is_none() {
                 q.source = Some(source.to_string());
             }
-            into.entry(q.symbol.to_uppercase()).or_insert(q);
+            let key = normalize_symbol(&q.symbol);
+            q.symbol = key.clone();
+            into.entry(key).or_insert(q);
         }
     }
 }
