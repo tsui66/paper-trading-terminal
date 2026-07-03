@@ -339,6 +339,12 @@ scripts/
    FallbackProvider (yahoo → fcontext)
 ```
 
+## Disclaimer
+
+**For research and learning only.** This project is a **simulated paper-trading** tool. It does not connect to a brokerage, execute real orders, or provide investment advice. Market data may be delayed or inaccurate. You are solely responsible for how you use this software.
+
+**免责声明：** 本工具仅供模拟盘**研究与学习**使用，不构成任何投资建议，不涉及真实股票交易。
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
